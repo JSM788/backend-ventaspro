@@ -55,7 +55,7 @@ export class ProductosController {
       );
       
       // Actualizamos el producto con el url de la imagen guardada
-      await this.productosService.updateImageUrl(producto.id, uploadResult.relativePath);
+      await this.productosService.updateImageUrl(producto.id, uploadResult.path);
     }
     
     return { success: true, productoId: producto.id };
