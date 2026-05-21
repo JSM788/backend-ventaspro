@@ -104,9 +104,9 @@ export class ComprobantesService {
               cantidad: d.cantidad,
               precioUnitario: d.precioUnitario,
               valorUnitario: d.valorUnitario,
-              igv: d.igv,
-              subtotal: d.subtotal,
-              total: d.total
+              igv: (d.cantidad * d.precioUnitario) - (d.cantidad * d.valorUnitario),
+              subtotal: d.cantidad * d.valorUnitario,
+              total: d.cantidad * d.precioUnitario
             }))
           }
         }

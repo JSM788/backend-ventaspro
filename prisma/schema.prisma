@@ -58,8 +58,8 @@ model Cliente {
   email         String?
   telefono      String?
   direccion     String?
-  tipoClienteId Int          @map("tipo_cliente_id")
-  tipoCliente   TipoCliente  @relation(fields: [tipoClienteId], references: [id])
+  tipoClienteId Int?         @map("tipo_cliente_id")
+  tipoCliente   TipoCliente? @relation(fields: [tipoClienteId], references: [id])
   estado        String       @default("ACTIVO")
   comprobantes  Comprobante[]
   notasVenta    NotaVenta[]
