@@ -1,0 +1,252 @@
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum EstadoSunat {
+  PENDIENTE
+  PROCESANDO
+  ACEPTADO
+  RECHAZADO_POR_CORREGIR
+  FALLIDO_REINTENTANDO
+  ANULADO
+}
+
+enum ViaEmision {
+  NATIVO
+  NUBEFACT
+}
+
+model Empresa {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ruc                 String   @unique @db.VarChar(11)
+  razonSocial         String   @map("razon_social") @db.VarChar(255)
+  certificadoUrl      String?  @map("certificado_url")
+  certificadoPassword String?  @map("certificado_password")
+  logoClaro           String?  @map("logo_claro")   // Path relativo: empresas/{id}/logo-claro.webp
+  logoOscuro          String?  @map("logo_oscuro")  // Path relativo: empresas/{id}/logo-oscuro.webp
+  
+  comprobantes        Comprobante[]
+  series              SerieConfig[]
+  productos           Producto[]
+  categorias          Categoria[]
+  
+  createdAt           DateTime @default(now()) @map("created_at")
+  
+  @@map("empresas")
+}
+
+model TipoCliente {
+  id          Int       @id @default(autoincrement())
+  nombre      String    @unique
+  descripcion String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  clientes    Cliente[]
+
+  @@map("tipos_cliente")
+}
+
+model Cliente {
+  id            Int          @id @default(autoincrement())
+  razonSocial   String       @map("razon_social")
+  ruc           String       @unique
+  email         String?
+  telefono      String?
+  direccion     String?
+  tipoClienteId Int          @map("tipo_cliente_id")
+  tipoCliente   TipoCliente  @relation(fields: [tipoClienteId], references: [id])
+  estado        String       @default("ACTIVO")
+  comprobantes  Comprobante[]
+  notasVenta    NotaVenta[]
+  cotizaciones  Cotizacion[]
+  pedidos       Pedido[]
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  @@map("clientes")
+}
+
+model Comprobante {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  empresaId           String?  @map("empresa_id") @db.Uuid
+  empresa             Empresa? @relation(fields: [empresaId], references: [id])
+  
+  transaccionId       String   @unique @map("transaccion_id") @db.VarChar(50)
+  
+  tipo                String    // '01' Factura, '03' Boleta, '07' NC, '08' ND
+  serie               String    @db.VarChar(4)
+  correlativo         Int
+  fechaEmision        DateTime  @default(now()) @map("fecha_emision")
+  clienteId           Int       @map("cliente_id")
+  cliente             Cliente   @relation(fields: [clienteId], references: [id])
+  moneda              String    @default("PEN")
+  
+  // Totales SUNAT
+  operacionGravada    Decimal   @default(0) @db.Decimal(12, 2) @map("operacion_gravada")
+  operacionExonerada  Decimal   @default(0) @db.Decimal(12, 2) @map("operacion_exonerada")
+  operacionInafecta   Decimal   @default(0) @db.Decimal(12, 2) @map("operacion_inafecta")
+  igv                 Decimal   @default(0) @db.Decimal(12, 2)
+  total               Decimal   @db.Decimal(12, 2) @map("monto_total")
+  
+  // Estado e Integración Híbrida
+  estadoSunat         EstadoSunat @default(PENDIENTE) @map("estado_sunat")
+  viaEmision          ViaEmision  @default(NATIVO) @map("via_emision")
+  
+  sunatCodeError      String?   @map("sunat_code_error") @db.VarChar(10)
+  sunatResponseMsg    String?   @map("sunat_response_msg")
+  
+  pdfPath             String?   @map("pdf_path")
+  xmlPath             String?   @map("xml_path")
+  
+  // Relaciones
+  detalles            ComprobanteDetalle[]
+
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  @@map("comprobantes")
+  @@unique([serie, correlativo, tipo])
+}
+
+model NotaVenta {
+  id              Int       @id @default(autoincrement())
+  numero          String    @unique
+  fechaEmision    DateTime  @default(now()) @map("fecha_emision")
+  clienteId       Int       @map("cliente_id")
+  cliente         Cliente   @relation(fields: [clienteId], references: [id])
+  moneda          String    @default("PEN")
+  total           Decimal   @db.Decimal(12, 2)
+  estado          String    @default("REGISTRADO")
+  estadoPago      String    @default("POR_COBRAR") @map("estado_pago")
+  comprobantes    String?   // Almacenar como string de IDs o nombres
+  observaciones   String?
+  vendedor        String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("notas_venta")
+}
+
+model Cotizacion {
+  id              Int       @id @default(autoincrement())
+  numero          String    @unique
+  fechaEmision    DateTime  @default(now()) @map("fecha_emision")
+  validezDias     Int       @default(7) @map("validez_dias")
+  clienteId       Int       @map("cliente_id")
+  cliente         Cliente   @relation(fields: [clienteId], references: [id])
+  moneda          String    @default("PEN")
+  total           Decimal   @db.Decimal(12, 2)
+  estado          String    @default("REGISTRADO") // REGISTRADO, ACEPTADO, ANULADO
+  entrega         String?   @map("estado_entrega")
+  comprobantes    String?   // Comprobantes vinculados
+  notasVenta      String?   @map("notas_venta")
+  vendedor        String?
+  registradoPor   String?   @map("registrado_por")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("cotizaciones")
+}
+
+model Pedido {
+  id              Int       @id @default(autoincrement())
+  numero          String    @unique
+  fechaEmision    DateTime  @default(now()) @map("fecha_emision")
+  fechaEntrega    DateTime? @map("fecha_entrega")
+  fechaVencimiento DateTime? @map("fecha_vencimiento")
+  clienteId       Int       @map("cliente_id")
+  cliente         Cliente   @relation(fields: [clienteId], references: [id])
+  moneda          String    @default("PEN")
+  total           Decimal   @db.Decimal(12, 2)
+  estado          String    @default("PENDIENTE") // PENDIENTE, ENTREGADO, ANULADO
+  estadoPago      String    @default("PENDIENTE") @map("estado_pago")
+  comprobantes    String?   
+  notasVenta      String?   @map("notas_venta")
+  vendedor        String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("pedidos")
+}
+
+model SerieConfig {
+  id                  Int      @id @default(autoincrement())
+  empresaId           String   @map("empresa_id") @db.Uuid
+  empresa             Empresa  @relation(fields: [empresaId], references: [id])
+  
+  tipoComprobante     String   @map("tipo_comprobante") @db.VarChar(2) // '01' Factura, '03' Boleta
+  serie               String   @db.VarChar(4) // Ej. 'F001'
+  ultimoCorrelativo   Int      @default(0) @map("ultimo_correlativo")
+  
+  estado              String   @default("ACTIVO") // ACTIVO, INACTIVO
+  
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@unique([empresaId, serie])
+  @@map("serie_config")
+}
+
+model Categoria {
+  id          Int        @id @default(autoincrement())
+  empresaId   String     @map("empresa_id") @db.Uuid
+  empresa     Empresa    @relation(fields: [empresaId], references: [id])
+  nombre      String
+  descripcion String?
+  productos   Producto[]
+
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@map("categorias")
+}
+
+model Producto {
+  id              Int        @id @default(autoincrement())
+  empresaId       String     @map("empresa_id") @db.Uuid
+  empresa         Empresa    @relation(fields: [empresaId], references: [id])
+  
+  tipo            String     @default("PRODUCTO") // PRODUCTO, SERVICIO, PACK
+  nombre          String
+  descripcion     String?
+  unidadMedida    String     @default("NIU") @map("unidad_medida") // NIU, ZZ
+  
+  precioUnitario  Decimal    @default(0) @db.Decimal(12, 2) @map("precio_unitario")
+  incluyeIgv      Boolean    @default(true) @map("incluye_igv")
+  tipoAfectacion  String     @default("10") @map("tipo_afectacion") // 10 = Gravado, 20 = Exonerado
+  
+  stock           Decimal    @default(0) @db.Decimal(12, 2)
+  codigoInterno   String?    @map("codigo_interno")
+  codigoSunat     String?    @map("codigo_sunat")
+  
+  imagenUrl       String?    @map("imagen_url")
+  
+  categoriaId     Int?       @map("categoria_id")
+  categoria       Categoria? @relation(fields: [categoriaId], references: [id])
+
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  @@map("productos")
+}
+
+model ComprobanteDetalle {
+  id              Int         @id @default(autoincrement())
+  comprobanteId   String      @map("comprobante_id") @db.Uuid
+  comprobante     Comprobante @relation(fields: [comprobanteId], references: [id], onDelete: Cascade)
+  
+  descripcion     String
+  cantidad        Decimal     @db.Decimal(10, 2)
+  precioUnitario  Decimal     @map("precio_unitario") @db.Decimal(12, 2)
+  valorUnitario   Decimal     @map("valor_unitario") @db.Decimal(12, 2)
+  igv             Decimal     @db.Decimal(12, 2)
+  subtotal        Decimal     @db.Decimal(12, 2)
+  total           Decimal     @db.Decimal(12, 2)
+
+  @@map("comprobante_detalles")
+}
