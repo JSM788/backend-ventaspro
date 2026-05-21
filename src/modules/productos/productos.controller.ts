@@ -13,7 +13,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { ProductosService } from './productos.service';
-import { StorageService } from '../../core/storage/storage.service';
+import { StorageService } from '../../core/storage/storage.interface';
 
 @Controller('productos')
 export class ProductosController {
