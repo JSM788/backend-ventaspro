@@ -138,6 +138,34 @@ export class ComprobantesController {
     return diagnostico;
   }
 
+  @Get(':id/pdf')
+  async downloadPdfById(@Param('id') id: string, @Res() res: Response) {
+    const comprobante = await db.comprobante.findUnique({
+      where: { id },
+      include: { empresa: true }
+    });
+    
+    if (!comprobante) {
+      return res.status(404).send('Comprobante no encontrado');
+    }
+
+    const tipoCpe = comprobante.tipo === 'NV' ? 'NV' : (comprobante.tipo === '01' ? '01' : '03');
+    const correlativoStr = String(comprobante.correlativo).padStart(7, '0');
+    const filename = `${comprobante.empresa!.ruc}-${tipoCpe}-${comprobante.serie}-${correlativoStr}.pdf`;
+    
+    const filePath = path.join(process.cwd(), 'uploads', 'pdf', filename);
+    
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).send('PDF no generado o no encontrado');
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+  }
+
   @Get('download/:type/:filename')
   downloadFile(
     @Param('type') type: string,
