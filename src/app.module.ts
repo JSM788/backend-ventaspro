@@ -11,9 +11,12 @@ import { EmpresasModule } from './modules/empresas/empresas.module';
 import { StorageModule } from './core/storage/storage.module';
 import { SeriesModule } from './modules/series/series.module';
 import { ProductosModule } from './modules/productos/productos.module';
+import { FinanzasModule } from './modules/finanzas/finanzas.module';
+import { InventarioModule } from './modules/inventario/inventario.module';
+import { ComprasModule } from './modules/compras/compras.module';
 
 @Module({
-  imports: [DatabaseModule, ClientesModule, ComprobantesModule, NotasVentaModule, CotizacionesModule, PedidosModule, EmpresasModule, StorageModule, SeriesModule, ProductosModule],
+  imports: [DatabaseModule, ClientesModule, ComprobantesModule, NotasVentaModule, CotizacionesModule, PedidosModule, EmpresasModule, StorageModule, SeriesModule, ProductosModule, FinanzasModule, InventarioModule, ComprasModule],
   controllers: [AppController],
   providers: [AppService],
 })

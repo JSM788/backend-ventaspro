@@ -4,6 +4,9 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { join } from 'path';
 
+// Inicializar el worker de la cola de facturación
+import './pse/queues/worker/FacturacionWorker';
+
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.enableCors({

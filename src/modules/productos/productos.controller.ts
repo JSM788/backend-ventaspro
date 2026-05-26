@@ -15,7 +15,7 @@ import { memoryStorage } from 'multer';
 import { ProductosService } from './productos.service';
 import { StorageService } from '../../core/storage/storage.interface';
 
-@Controller('productos')
+@Controller('v1/productos')
 export class ProductosController {
   constructor(
     private readonly productosService: ProductosService,

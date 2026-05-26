@@ -6,15 +6,16 @@ export class NotasVentaService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll() {
-    return this.prisma.notaVenta.findMany({
+    return this.prisma.comprobante.findMany({
+      where: { tipo: 'NV' },
       include: { cliente: true },
       orderBy: { fechaEmision: 'desc' },
     });
   }
 
   async create(data: any) {
-    return this.prisma.notaVenta.create({
-      data,
+    return this.prisma.comprobante.create({
+      data: { ...data, tipo: 'NV' },
     });
   }
 }

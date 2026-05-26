@@ -56,3 +56,41 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /generated/prisma
+
+# ============================================================
+# Archivos generados en tiempo de ejecución (NO subir al repo)
+# ============================================================
+
+# Comprobantes electrónicos generados por el sistema de facturación
+/uploads/pdf/
+/uploads/xml/
+/uploads/cdr/
+
+# Logos de empresas subidos por el usuario (binarios, se gestionan aparte)
+/uploads/empresas/
+
+# Conservar la estructura de carpetas con .gitkeep
+!/uploads/pdf/.gitkeep
+!/uploads/xml/.gitkeep
+!/uploads/cdr/.gitkeep
+!/uploads/empresas/.gitkeep
+
+# Certificados digitales (.p12, .pfx) — NUNCA subir al repositorio
+*.p12
+*.pfx
+*.cer
+*.crt
+*.pem
+
+# Scripts de diagnóstico y debug temporales
+diag-*.ts
+diag-*.js
+debug-*.ts
+debug-*.js
+check.js
+check-*.ts
+check-*.js
+fix-*.ts
+fix-*.js
+setup-cert.*
+

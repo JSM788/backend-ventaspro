@@ -61,6 +61,19 @@ async function main() {
       moneda: 'PEN',
       total: 85.00,
       estadoSunat: EstadoSunat.PENDIENTE
+    },
+    {
+      tipo: 'NV',
+      serie: 'NV01',
+      correlativo: 100,
+      transaccionId: 'seed-nv01-100',
+      clienteId: clienteBPM.id,
+      moneda: 'PEN',
+      total: 1250.50,
+      estadoSunat: EstadoSunat.PENDIENTE,
+      estadoPago: 'PAGADO',
+      vendedor: 'Administrador',
+      observaciones: 'Venta directa de almacén'
     }
   ];
 
@@ -78,28 +91,8 @@ async function main() {
     });
   }
 
-  // 4. Notas de Venta
-  console.log('📝 Insertando Notas de Venta...');
-  const notas = [
-    {
-      numero: "NV01-000100",
-      clienteId: clienteBPM.id,
-      moneda: "PEN",
-      total: 1250.50,
-      estado: "REGISTRADO",
-      estadoPago: "PAGADO",
-      vendedor: "Administrador",
-      observaciones: "Venta directa de almacén"
-    }
-  ];
-
-  for (const nota of notas) {
-    await prisma.notaVenta.upsert({
-      where: { numero: nota.numero },
-      update: {},
-      create: nota,
-    });
-  }
+  // 4. Notas de Venta (ahora consolidadas en Comprobantes)
+  // Las insertamos arriba en el arreglo de comprobantes.
 
   // 5. Cotizaciones
   console.log('💰 Insertando Cotizaciones...');

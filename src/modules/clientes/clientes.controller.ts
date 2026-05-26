@@ -5,6 +5,11 @@ import { ClientesService } from './clientes.service';
 export class ClientesController {
   constructor(private readonly clientesService: ClientesService) {}
 
+  @Get('validar/:numero')
+  validateRuc(@Param('numero') numero: string) {
+    return this.clientesService.validateRuc(numero);
+  }
+
   @Post()
   create(@Body() createClienteDto: any) {
     return this.clientesService.create(createClienteDto);
