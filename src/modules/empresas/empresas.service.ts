@@ -71,4 +71,32 @@ export class EmpresasService {
 
     return { url: result.url, path: result.path };
   }
+
+  async updateCertificado(file: Express.Multer.File | undefined, data: any) {
+    const empresa = await this.getConfig();
+    const updateData: any = {};
+
+    if (file) {
+      updateData.certificadoBase64 = file.buffer.toString('base64');
+    }
+    
+    if (data.certificadoPassword !== undefined) {
+      updateData.certificadoPassword = data.certificadoPassword;
+    }
+    
+    if (data.sunatUsuario !== undefined) {
+      updateData.sunatUsuario = data.sunatUsuario;
+    }
+    
+    if (data.sunatClave !== undefined) {
+      updateData.sunatClave = data.sunatClave;
+    }
+
+    await this.prisma.empresa.update({
+      where: { id: empresa.id },
+      data: updateData,
+    });
+
+    return { success: true };
+  }
 }

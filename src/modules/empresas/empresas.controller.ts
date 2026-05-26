@@ -57,4 +57,18 @@ export class EmpresasController {
     }
     return this.empresasService.uploadLogo(tipo, file);
   }
+
+  @Post('config/certificado')
+  @UseInterceptors(
+    FileInterceptor('certificado', {
+      storage: memoryStorage(),
+      limits: { fileSize: 10 * 1024 * 1024 },
+    }),
+  )
+  uploadCertificado(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: any,
+  ) {
+    return this.empresasService.updateCertificado(file, body);
+  }
 }
