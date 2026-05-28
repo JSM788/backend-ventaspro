@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "postinstall": "prisma generate",
-    "build": "prisma generate && prisma db push --accept-data-loss && nest build",
+    "build": "prisma generate && prisma db push --accept-data-loss && npx ts-node prisma/seed.ts && nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "node dist/src/main.js",
     "start:dev": "nest start --watch",
