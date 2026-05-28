@@ -9,12 +9,15 @@ import { InvoiceBuilder } from '../../pse/core/xml/builders/InvoiceBuilder';
 import { XmlSigner } from '../../pse/core/signer/XmlSigner';
 import { SunatSoapClient } from '../../pse/core/sunat/soap/SunatSoapClient';
 
+import { CurrentTenant } from '../../core/auth/current-tenant.decorator';
+
 @Controller('comprobantes')
 export class ComprobantesController {
   constructor(private readonly comprobantesService: ComprobantesService) {}
 
   @Get()
   findAll(
+    @CurrentTenant() empresaId: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('search') search?: string,
@@ -24,6 +27,7 @@ export class ComprobantesController {
     @Query('fechaFin') fechaFin?: string
   ) {
     return this.comprobantesService.findAll({
+      empresaId,
       page: page ? Number(page) : 1,
       limit: limit ? Number(limit) : 10,
       search,
@@ -36,6 +40,7 @@ export class ComprobantesController {
 
   @Get('summary')
   getSummary(
+    @CurrentTenant() empresaId: string,
     @Query('search') search?: string,
     @Query('estado') estado?: string,
     @Query('serie') serie?: string,
@@ -43,18 +48,18 @@ export class ComprobantesController {
     @Query('fechaFin') fechaFin?: string
   ) {
     return this.comprobantesService.getSummary({
-      search, estado, serie, fechaInicio, fechaFin
+      empresaId, search, estado, serie, fechaInicio, fechaFin
     });
   }
 
   @Post('consolidar')
-  consolidar(@Body() data: { notasVentaIds: string[], clienteId: number, tipoComprobante: string, serie: string }) {
-    return this.comprobantesService.consolidar(data);
+  consolidar(@CurrentTenant() empresaId: string, @Body() data: { notasVentaIds: string[], clienteId: number, tipoComprobante: string, serie: string }) {
+    return this.comprobantesService.consolidar({ empresaId, ...data });
   }
 
   @Post()
-  create(@Body() data: any) {
-    return this.comprobantesService.create(data);
+  create(@CurrentTenant() empresaId: string, @Body() data: any) {
+    return this.comprobantesService.create(empresaId, data);
   }
 
   @Post(':id/retry')
@@ -95,12 +100,13 @@ export class ComprobantesController {
 
     // Si NO tiene certificado → ir a Nubefact
     if (!tieneCertificado) {
-      try {
-        const result = await NubefactProvider.enviar(comprobante.id);
-        diagnostico.nubefactResult = result;
-      } catch (e: any) {
-        diagnostico.error = 'Error Nubefact: ' + e.message;
-      }
+      // MODO MVP: Dormido
+      diagnostico.nubefactResult = { status: 'DORMIDO_MVP', message: 'Simulando aceptación local' };
+      diagnostico.estadoActual = 'ACEPTADO';
+      await db.comprobante.update({
+        where: { id: comprobante.id },
+        data: { estadoSunat: 'ACEPTADO', sunatResponseMsg: 'Simulado Aceptado por botón reintentar (MVP)' }
+      });
     } else {
       // Tiene certificado: intentar firma + SUNAT
       const tieneCredencialesSunat = !!comprobante.empresa?.sunatUsuario && !!comprobante.empresa?.sunatClave;
@@ -129,7 +135,7 @@ export class ComprobantesController {
         // Probar SUNAT SOAP con timeout corto
         const soapResult = await SunatSoapClient.sendBill(comprobante.empresa!, comprobante, signedXml);
         diagnostico.sunatOk = true;
-        diagnostico.sunatResult = { xmlPath: soapResult.xmlPath, cdrPath: soapResult.cdrPath };
+        diagnostico.sunatResult = { xmlPath: soapResult.xmlFileName, cdrPath: soapResult.zipFileName };
       } catch (e: any) {
         diagnostico.error = 'Error en flujo nativo: ' + e.message;
       }
@@ -142,28 +148,29 @@ export class ComprobantesController {
   async downloadPdfById(@Param('id') id: string, @Res() res: Response) {
     const comprobante = await db.comprobante.findUnique({
       where: { id },
-      include: { empresa: true }
+      include: { empresa: true, cliente: true, detalles: true }
     });
     
     if (!comprobante) {
       return res.status(404).send('Comprobante no encontrado');
     }
 
-    const tipoCpe = comprobante.tipo === 'NV' ? 'NV' : (comprobante.tipo === '01' ? '01' : '03');
-    const correlativoStr = String(comprobante.correlativo).padStart(7, '0');
-    const filename = `${comprobante.empresa!.ruc}-${tipoCpe}-${comprobante.serie}-${correlativoStr}.pdf`;
-    
-    const filePath = path.join(process.cwd(), 'uploads', 'pdf', filename);
-    
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).send('PDF no generado o no encontrado');
-    }
+    try {
+      const { PdfGenerator } = require('../../pse/core/pdf/PdfGenerator');
+      const pdfBuffer = await PdfGenerator.generarComprobante(comprobante);
 
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
-    
-    const fileStream = fs.createReadStream(filePath);
-    fileStream.pipe(res);
+      const tipoCpe = comprobante.tipo === 'NV' ? 'NV' : (comprobante.tipo === '01' ? '01' : '03');
+      const correlativoStr = String(comprobante.correlativo).padStart(7, '0');
+      const filename = `${comprobante.empresa!.ruc}-${tipoCpe}-${comprobante.serie}-${correlativoStr}.pdf`;
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+      
+      res.send(pdfBuffer);
+    } catch (error: any) {
+      console.error('Error generando PDF on-demand:', error);
+      res.status(500).send('Error generando PDF');
+    }
   }
 
   @Get('download/:type/:filename')

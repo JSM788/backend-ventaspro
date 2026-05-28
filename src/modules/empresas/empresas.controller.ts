@@ -22,6 +22,11 @@ export class EmpresasController {
     return this.empresasService.getConfig();
   }
 
+  @Post('config')
+  createConfig(@Body() data: any) {
+    return this.empresasService.createConfig(data);
+  }
+
   @Put('config')
   updateConfig(@Body() data: any) {
     return this.empresasService.updateConfig(data);

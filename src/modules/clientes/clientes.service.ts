@@ -5,42 +5,49 @@ import { PrismaService } from '../../core/database/prisma.service';
 export class ClientesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
+  async findAll(empresaId: string) {
     return this.prisma.cliente.findMany({
+      where: { empresaId },
       include: { tipoCliente: true },
       orderBy: { createdAt: 'desc' }
     });
   }
 
-  async findOne(id: number) {
+  async findOne(id: number, empresaId: string) {
     return this.prisma.cliente.findUnique({
       where: { id },
       include: { tipoCliente: true },
     });
   }
 
-  async create(data: any) {
+  async create(empresaId: string, data: any) {
     return this.prisma.cliente.create({
-      data,
+      data: {
+        ...data,
+        empresaId,
+      },
     });
   }
 
-  async update(id: number, data: any) {
+  async update(id: number, empresaId: string, data: any) {
     return this.prisma.cliente.update({
       where: { id },
       data,
     });
   }
 
-  async remove(id: number) {
+  async remove(id: number, empresaId: string) {
     return this.prisma.cliente.delete({
       where: { id },
     });
   }
 
-  async validateRuc(numero: string) {
+  async validateRuc(empresaId: string, numero: string) {
     // 1. Buscar en BD local
-    const clienteLocal = await this.prisma.cliente.findUnique({ where: { ruc: numero } });
+    const clienteLocal = await this.prisma.cliente.findUnique({ 
+      where: { empresaId_ruc: { empresaId, ruc: numero } } 
+    });
+    
     if (clienteLocal) {
       return { 
         source: 'local', 
@@ -78,10 +85,10 @@ export class ClientesService {
 
       // Guardarlo en nuestra base de datos local automáticamente
       try {
-        let tipoCliente = await this.prisma.tipoCliente.findFirst();
+        let tipoCliente = await this.prisma.tipoCliente.findFirst({ where: { empresaId } });
         if (!tipoCliente) {
           tipoCliente = await this.prisma.tipoCliente.create({
-            data: { nombre: 'General', descripcion: 'Tipo de cliente por defecto' }
+            data: { nombre: 'General', descripcion: 'Tipo de cliente por defecto', empresaId }
           });
         }
 
@@ -90,7 +97,8 @@ export class ClientesService {
             ruc: rucDni,
             razonSocial: razonSocial,
             direccion: direccion,
-            tipoClienteId: tipoCliente.id
+            tipoClienteId: tipoCliente.id,
+            empresaId
           }
         });
       } catch (e) {

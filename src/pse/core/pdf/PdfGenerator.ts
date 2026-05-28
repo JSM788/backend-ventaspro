@@ -14,7 +14,7 @@ const fonts = {
 };
 
 export class PdfGenerator {
-    static async generarComprobante(comprobante: any, xmlHash: string = ''): Promise<string> {
+    static async generarComprobante(comprobante: any, xmlHash: string = ''): Promise<Buffer> {
         try {
             // Sintaxis clásica y estable de pdfmake 0.2.x
             const printer = new PdfPrinter({
@@ -161,24 +161,21 @@ export class PdfGenerator {
                 }
             };
 
-            // 4. Generar y guardar el archivo PDF
-            const fileName = `${empresa.ruc}-${tipoCpe}-${comprobante.serie}-${correlativoStr}.pdf`;
-            const filePath = path.join(process.cwd(), 'uploads', 'pdf', fileName);
-
+            // 4. Generar y retornar el archivo PDF como Buffer
             return new Promise((resolve, reject) => {
                 const pdfDoc = printer.createPdfKitDocument(docDefinition);
-                const writeStream = fs.createWriteStream(filePath);
+                const chunks: any[] = [];
                 
-                pdfDoc.pipe(writeStream);
-                pdfDoc.end();
-
-                writeStream.on('finish', () => {
-                    resolve(filePath);
+                pdfDoc.on('data', (chunk: any) => chunks.push(chunk));
+                pdfDoc.on('end', () => {
+                    const result = Buffer.concat(chunks);
+                    resolve(result);
                 });
-
-                writeStream.on('error', (err) => {
+                pdfDoc.on('error', (err: any) => {
                     reject(err);
                 });
+                
+                pdfDoc.end();
             });
 
         } catch (error) {

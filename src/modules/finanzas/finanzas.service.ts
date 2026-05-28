@@ -1,3 +1,4 @@
+
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../core/database/prisma.service';
 
@@ -70,6 +71,7 @@ export class FinanzasService {
       // 1. Registrar el pago principal
       const nuevoPago = await tx.pago.create({
         data: {
+          empresaId: comprobante.empresaId!, // INYECCIÓN MULTITENANT
           comprobanteId,
           cuentaId: Number(data.cuentaId),
           clienteId: comprobante.clienteId,
@@ -128,7 +130,11 @@ export class FinanzasService {
         await tx.clienteSaldo.upsert({
           where: { clienteId: comprobante.clienteId },
           update: { saldoAFavor: { increment: montoRestante } },
-          create: { clienteId: comprobante.clienteId, saldoAFavor: montoRestante }
+          create: { 
+            empresaId: comprobante.empresaId!, // INYECCIÓN MULTITENANT
+            clienteId: comprobante.clienteId, 
+            saldoAFavor: montoRestante 
+          }
         });
       }
 

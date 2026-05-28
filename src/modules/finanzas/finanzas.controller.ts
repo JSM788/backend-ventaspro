@@ -1,13 +1,14 @@
 import { Controller, Get, Post, Delete, Body, Param, Headers, BadRequestException } from '@nestjs/common';
 import { FinanzasService } from './finanzas.service';
+import { CurrentTenant } from '../../core/auth/current-tenant.decorator';
 
 @Controller('finanzas')
 export class FinanzasController {
   constructor(private readonly finanzasService: FinanzasService) {}
 
   @Get('cuentas')
-  async getCuentas(@Headers('x-empresa-id') empresaId: string) {
-    if (!empresaId) throw new BadRequestException('Se requiere x-empresa-id');
+  async getCuentas(@CurrentTenant() empresaId: string) {
+    if (!empresaId) throw new BadRequestException('Falta empresaId en el token');
     return await this.finanzasService.getCuentas(empresaId);
   }
 

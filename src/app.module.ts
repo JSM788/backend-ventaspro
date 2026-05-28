@@ -14,10 +14,20 @@ import { ProductosModule } from './modules/productos/productos.module';
 import { FinanzasModule } from './modules/finanzas/finanzas.module';
 import { InventarioModule } from './modules/inventario/inventario.module';
 import { ComprasModule } from './modules/compras/compras.module';
+import { AuthModule } from './core/auth/auth.module';
+
+import { APP_GUARD } from '@nestjs/core';
+import { TenantGuard } from './core/auth/tenant.guard';
 
 @Module({
-  imports: [DatabaseModule, ClientesModule, ComprobantesModule, NotasVentaModule, CotizacionesModule, PedidosModule, EmpresasModule, StorageModule, SeriesModule, ProductosModule, FinanzasModule, InventarioModule, ComprasModule],
+  imports: [DatabaseModule, ClientesModule, ComprobantesModule, NotasVentaModule, CotizacionesModule, PedidosModule, EmpresasModule, StorageModule, SeriesModule, ProductosModule, FinanzasModule, InventarioModule, ComprasModule, AuthModule],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: TenantGuard,
+    },
+  ],
 })
 export class AppModule {}

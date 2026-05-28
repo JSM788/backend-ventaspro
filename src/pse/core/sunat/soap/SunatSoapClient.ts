@@ -7,7 +7,7 @@ export class SunatSoapClient {
         empresa: any, 
         comprobante: any, 
         signedXml: string
-    ): Promise<{ cdrBase64: string, xmlPath: string, cdrPath: string }> {
+    ): Promise<{ cdrBuffer: Buffer | null, xmlString: string, xmlFileName: string, zipFileName: string | null }> {
         const tipoCpe = (comprobante.tipo === '01' || comprobante.tipo.toLowerCase() === 'factura') ? '01' : '03';
         const correlativoStr = String(comprobante.correlativo).padStart(7, '0');
         
@@ -64,19 +64,14 @@ export class SunatSoapClient {
 
         const cdrMatch = soapResponseText.match(/<applicationResponse>(.*?)<\/applicationResponse>/s);
         const cdrBase64 = cdrMatch ? cdrMatch[1].trim() : '';
+        const cdrBuffer = cdrBase64 ? Buffer.from(cdrBase64, 'base64') : null;
 
-        // Guardar archivos localmente
-        const xmlPathLocal = path.join(process.cwd(), 'uploads', 'xml', xmlFileName);
-        fs.writeFileSync(xmlPathLocal, signedXml);
-
-        let cdrPathLocal = '';
-        if (cdrBase64) {
-            const cdrZipFileName = `R-${zipFileName}`;
-            cdrPathLocal = path.join(process.cwd(), 'uploads', 'cdr', cdrZipFileName);
-            fs.writeFileSync(cdrPathLocal, Buffer.from(cdrBase64, 'base64'));
-        }
-
-            return { cdrBase64, xmlPath: xmlPathLocal, cdrPath: cdrPathLocal };
+        return { 
+            cdrBuffer, 
+            xmlString: signedXml,
+            xmlFileName,
+            zipFileName: cdrBase64 ? `R-${zipFileName}` : null
+        };
         } catch (error: any) {
             clearTimeout(timeoutId);
             if (error.name === 'AbortError') {

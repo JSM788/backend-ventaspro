@@ -23,30 +23,51 @@ export class LocalStorageProvider extends StorageService {
   private readonly uploadRoot = join(process.cwd(), 'uploads');
 
   async upload(
-    context: string,
-    entityId: string,
+    visibility: 'public' | 'private' | 'temp',
+    tenantKey: string,
+    modulePath: string,
     filename: string,
     buffer: Buffer,
     mimetype: string,
+    useDateNesting?: boolean,
   ): Promise<UploadResult> {
-    // Ruta final: uploads/empresas/{uuid}/logo-claro.webp
-    const folder = join(this.uploadRoot, context, entityId);
-    const finalFilename = `${filename}.webp`;
+    const isImage = mimetype.startsWith('image/') && mimetype !== 'image/svg+xml';
+    const finalFilename = isImage ? `${filename.split('.')[0] || filename}.webp` : filename;
+
+    let relativeFolder = join(visibility, tenantKey, modulePath);
+    
+    if (useDateNesting) {
+      const date = new Date();
+      const year = date.getFullYear().toString();
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const day = date.getDate().toString().padStart(2, '0');
+      relativeFolder = join(relativeFolder, year, month, day);
+    }
+
+    const folder = join(this.uploadRoot, relativeFolder);
     const absolutePath = join(folder, finalFilename);
-    const relativePath = `${context}/${entityId}/${finalFilename}`;
+    const relativePath = join(relativeFolder, finalFilename).replace(/\\/g, '/');
 
     // Crear la carpeta si no existe (mkdirSync con recursive es seguro)
     if (!existsSync(folder)) {
       mkdirSync(folder, { recursive: true });
     }
 
-    // Convertir a WebP con sharp (calidad 85 = buen balance peso/calidad)
-    const webpBuffer = await sharp(buffer)
-      .webp({ quality: 85 })
-      .toBuffer();
+    let finalBuffer = buffer;
+    
+    // Solo convertimos a WebP si es una imagen válida
+    if (isImage) {
+      try {
+        finalBuffer = await sharp(buffer)
+          .webp({ quality: 85 })
+          .toBuffer();
+      } catch (err) {
+        this.logger.warn(`No se pudo optimizar la imagen ${filename}, guardando original. Error: ${err.message}`);
+      }
+    }
 
-    await writeFile(absolutePath, webpBuffer);
-    this.logger.log(`Imagen guardada: ${relativePath}`);
+    await writeFile(absolutePath, finalBuffer);
+    this.logger.log(`Archivo guardado localmente: ${relativePath}`);
 
     return {
       path: relativePath,

@@ -12,20 +12,35 @@ export class EmpresasService {
   async getConfig() {
     // Para entornos multitenant reales, aquí se filtra por el tenantId del usuario (req.user)
     // Usaremos findFirst porque por ahora hay una sola empresa semilla
-    let empresa = await this.prisma.empresa.findFirst();
-    if (!empresa) {
-      empresa = await this.prisma.empresa.create({
-        data: {
-          ruc: '20123456789',
-          razonSocial: 'EMPRESA DE PRUEBA SAC',
-        },
-      });
+    return this.prisma.empresa.findFirst();
+  }
+
+  async createConfig(data: any) {
+    const existing = await this.getConfig();
+    if (existing) {
+      throw new Error('La empresa ya está configurada. Usa PUT para actualizar.');
     }
-    return empresa;
+
+    // Generar un slug básico a partir de la razón social
+    const slug = data.razonSocial
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)+/g, '');
+
+    return this.prisma.empresa.create({
+      data: {
+        ruc: data.ruc,
+        razonSocial: data.razonSocial,
+        slug: slug || 'empresa',
+      },
+    });
   }
 
   async updateConfig(data: any) {
     const empresa = await this.getConfig();
+    if (!empresa) {
+      throw new Error('No hay empresa configurada. Usa POST para crearla primero.');
+    }
     return this.prisma.empresa.update({
       where: { id: empresa.id },
       data: {
@@ -42,6 +57,9 @@ export class EmpresasService {
    */
   async uploadLogo(tipo: 'claro' | 'oscuro', file: Express.Multer.File) {
     const empresa = await this.getConfig();
+    if (!empresa) {
+      throw new Error('No hay empresa configurada para subir un logo.');
+    }
 
     // Eliminar logo anterior si existe (para no acumular archivos huérfanos)
     const pathActual = tipo === 'claro' ? empresa.logoClaro : empresa.logoOscuro;
@@ -50,30 +68,36 @@ export class EmpresasService {
     }
 
     // Subir el nuevo logo al proveedor activo
+    const tenantKey = `${empresa.slug}-${empresa.id.substring(0, 8)}`;
     const result = await this.storage.upload(
-      'empresas',
-      empresa.id,
-      `logo-${tipo}`,
+      'public',
+      tenantKey,
+      'config', // Módulo
+      file.originalname,
       file.buffer,
       file.mimetype,
+      false
     );
 
-    // Guardar el path relativo en BD (no la URL, para que sea agnóstico al proveedor)
-    const updateData =
-      tipo === 'claro'
-        ? { logoClaro: result.path }
-        : { logoOscuro: result.path };
-
+    // Guardar la URL resultante en la BD
     await this.prisma.empresa.update({
       where: { id: empresa.id },
-      data: updateData,
+      data: {
+        ...(tipo === 'claro' ? { logoClaro: result.path } : { logoOscuro: result.path }),
+      },
     });
 
-    return { url: result.url, path: result.path };
+    return { url: result.url };
   }
 
+  /**
+   * Sube el certificado digital y lo encripta
+   */
   async updateCertificado(file: Express.Multer.File | undefined, data: any) {
     const empresa = await this.getConfig();
+    if (!empresa) {
+      throw new Error('No hay empresa configurada para subir el certificado.');
+    }
     const updateData: any = {};
 
     if (file) {

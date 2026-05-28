@@ -46,16 +46,19 @@ export class ProductosController {
       const ext = file.originalname.split('.').pop();
       const filename = `producto-${producto.id}.${ext}`;
       
+      const tenantKey = `${producto.empresa.slug}-${producto.empresaId.substring(0, 8)}`;
       const uploadResult = await this.storageService.upload(
+        'public',
+        tenantKey,
         'productos',
-        producto.empresaId, // entityId = empresa
         filename,
         file.buffer,
-        file.mimetype
+        file.mimetype,
+        false // No usar carpetas de fechas para imágenes de productos
       );
       
       // Actualizamos el producto con el url de la imagen guardada
-      await this.productosService.updateImageUrl(producto.id, uploadResult.path);
+      await this.productosService.updateImageUrl(producto.id, uploadResult.url);
     }
     
     return { success: true, productoId: producto.id };

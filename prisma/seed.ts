@@ -9,18 +9,32 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   console.log('🚀 Iniciando Seed Maestro (Todo el Módulo de Ventas)...');
 
+  // 1. Empresa Principal
+  const empresaPrueba = await prisma.empresa.upsert({
+    where: { ruc: '20123456789' },
+    update: {},
+    create: {
+      ruc: '20123456789',
+      razonSocial: 'Empresa Principal Seed S.A.C.',
+      slug: 'empresa-seed'
+    }
+  });
+
+  const empresaId = empresaPrueba.id;
+
   // 1. Tipos de Cliente
   const tipoGeneral = await prisma.tipoCliente.upsert({
     where: { nombre: 'General' },
     update: {},
-    create: { nombre: 'General' }
+    create: { nombre: 'General', empresaId }
   });
 
   // 2. Clientes
   const clienteBPM = await prisma.cliente.upsert({
-    where: { ruc: '20603415273' },
+    where: { empresaId_ruc: { empresaId, ruc: '20603415273' } },
     update: {},
     create: {
+      empresaId,
       razonSocial: 'BPM INDUSTRIAL S.A.C.',
       ruc: '20603415273',
       tipoClienteId: tipoGeneral.id,
@@ -29,9 +43,10 @@ async function main() {
   });
 
   const clientePrueba = await prisma.cliente.upsert({
-    where: { ruc: '20512345678' },
+    where: { empresaId_ruc: { empresaId, ruc: '20512345678' } },
     update: {},
     create: {
+      empresaId,
       razonSocial: 'Empresa de Prueba S.A.C.',
       ruc: '20512345678',
       tipoClienteId: tipoGeneral.id,
@@ -43,6 +58,7 @@ async function main() {
   console.log('📄 Insertando Comprobantes...');
   const comprobantes = [
     {
+      empresaId,
       tipo: '01',
       serie: 'F001',
       correlativo: 1,
@@ -53,6 +69,7 @@ async function main() {
       estadoSunat: EstadoSunat.ACEPTADO
     },
     {
+      empresaId,
       tipo: '03',
       serie: 'B001',
       correlativo: 1,
@@ -63,6 +80,7 @@ async function main() {
       estadoSunat: EstadoSunat.PENDIENTE
     },
     {
+      empresaId,
       tipo: 'NV',
       serie: 'NV01',
       correlativo: 100,
@@ -80,7 +98,8 @@ async function main() {
   for (const comp of comprobantes) {
     await prisma.comprobante.upsert({
       where: {
-        serie_correlativo_tipo: {
+        empresaId_serie_correlativo_tipo: {
+          empresaId: comp.empresaId,
           serie: comp.serie,
           correlativo: comp.correlativo,
           tipo: comp.tipo
@@ -88,6 +107,25 @@ async function main() {
       },
       update: {},
       create: comp,
+    });
+
+    // Asegurarse de que el SerieConfig exista con el correlativo actualizado
+    await prisma.serieConfig.upsert({
+      where: {
+        empresaId_serie: {
+          empresaId: comp.empresaId,
+          serie: comp.serie
+        }
+      },
+      update: {
+        ultimoCorrelativo: comp.correlativo
+      },
+      create: {
+        empresaId: comp.empresaId,
+        tipoComprobante: comp.tipo,
+        serie: comp.serie,
+        ultimoCorrelativo: comp.correlativo
+      }
     });
   }
 
@@ -98,6 +136,7 @@ async function main() {
   console.log('💰 Insertando Cotizaciones...');
   const cotizaciones = [
     {
+      empresaId,
       numero: "CT01-3",
       clienteId: clienteBPM.id,
       moneda: "PEN",
@@ -108,6 +147,7 @@ async function main() {
       registradoPor: "Administrador"
     },
     {
+      empresaId,
       numero: "CT01-2",
       clienteId: clienteBPM.id,
       moneda: "PEN",
@@ -118,6 +158,7 @@ async function main() {
       registradoPor: "Administrador"
     },
     {
+      empresaId,
       numero: "COT-6",
       clienteId: clienteBPM.id,
       moneda: "PEN",
@@ -128,6 +169,7 @@ async function main() {
       registradoPor: "Administrador"
     },
     {
+      empresaId,
       numero: "COT-3",
       clienteId: clienteBPM.id,
       moneda: "PEN",
@@ -152,6 +194,7 @@ async function main() {
   console.log('📦 Insertando Pedidos...');
   const pedidos = [
     {
+      empresaId,
       numero: "PD-3",
       clienteId: clienteBPM.id,
       moneda: "PEN",
@@ -161,6 +204,7 @@ async function main() {
       fechaEntrega: new Date("2026-04-10")
     },
     {
+      empresaId,
       numero: "PD-2",
       clienteId: clienteBPM.id,
       moneda: "PEN",
@@ -171,6 +215,7 @@ async function main() {
       fechaEntrega: new Date("2026-04-04")
     },
     {
+      empresaId,
       numero: "PD-1",
       clienteId: clienteBPM.id,
       moneda: "PEN",

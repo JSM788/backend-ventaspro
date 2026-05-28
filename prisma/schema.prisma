@@ -24,6 +24,7 @@ enum ViaEmision {
 model Empresa {
   id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   ruc                 String   @unique @db.VarChar(11)
+  slug                String   @unique @db.VarChar(100) // Restaurado porque se usa como tenantKey
   razonSocial         String   @map("razon_social") @db.VarChar(255)
   certificadoUrl      String?  @map("certificado_url")
   certificadoPassword String?  @map("certificado_password")
@@ -33,6 +34,9 @@ model Empresa {
   logoClaro           String?  @map("logo_claro")   // Path relativo: empresas/{id}/logo-claro.webp
   logoOscuro          String?  @map("logo_oscuro")  // Path relativo: empresas/{id}/logo-oscuro.webp
   
+  usuariosErp         UsuarioErp[]
+  perfiles            Perfil[]
+  
   comprobantes        Comprobante[]
   series              SerieConfig[]
   productos           Producto[]
@@ -40,14 +44,56 @@ model Empresa {
   cajasCuentas        CajaCuenta[]
   almacenes           Almacen[]
   ordenesCompra       OrdenCompra[]
+  clientes            Cliente[]
+  cotizaciones        Cotizacion[]
+  pedidos             Pedido[]
+  pagos               Pago[]
+  tiposCliente        TipoCliente[]
   
   createdAt           DateTime @default(now()) @map("created_at")
   
   @@map("empresas")
 }
 
+// --- IDENTITY & RBAC ---
+
+model UsuarioErp {
+  id             String   @id @default(uuid())
+  authUserId     String   @unique @map("auth_user_id") // Viene del IDP externo
+  email          String
+  isSuperAdmin   Boolean  @default(false) @map("is_super_admin")
+  
+  empresaId      String?  @map("empresa_id") @db.Uuid
+  empresa        Empresa? @relation(fields: [empresaId], references: [id])
+  
+  perfilId       String?  @map("perfil_id")
+  perfil         Perfil?  @relation(fields: [perfilId], references: [id])
+
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("usuarios_erp")
+}
+
+model Perfil {
+  id             String   @id @default(uuid())
+  empresaId      String   @map("empresa_id") @db.Uuid
+  empresa        Empresa  @relation(fields: [empresaId], references: [id])
+  
+  nombre         String   // Ej. "Cajero Turno Tarde"
+  permisos       Json     @default("[]") // JSONB Array ["ventas.crear", "inventario.ver"]
+  
+  usuarios       UsuarioErp[]
+
+  @@map("perfiles")
+}
+
+// --- TABLAS CON AISLAMIENTO MULTITENANT ---
+
 model TipoCliente {
   id          Int       @id @default(autoincrement())
+  empresaId   String?   @map("empresa_id") @db.Uuid
+  empresa     Empresa?  @relation(fields: [empresaId], references: [id])
+  
   nombre      String    @unique
   descripcion String?
   createdAt   DateTime  @default(now())
@@ -59,8 +105,11 @@ model TipoCliente {
 
 model Cliente {
   id            Int          @id @default(autoincrement())
+  empresaId     String       @map("empresa_id") @db.Uuid // AISLAMIENTO MULTITENANT
+  empresa       Empresa      @relation(fields: [empresaId], references: [id])
+  
   razonSocial   String       @map("razon_social")
-  ruc           String       @unique
+  ruc           String
   email         String?
   telefono      String?
   direccion     String?
@@ -79,7 +128,8 @@ model Cliente {
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
 
-  @@map("clientes")
+  @@unique([empresaId, ruc]) // El RUC es único solo DENTRO de la empresa
+  @@map("clientes") // Se mantiene nombre de tabla por ahora para no romper backend masivamente
 }
 
 model Comprobante {
@@ -113,6 +163,7 @@ model Comprobante {
   
   pdfPath             String?   @map("pdf_path")
   xmlPath             String?   @map("xml_path")
+  cdrPath             String?   @map("cdr_path")
   
   // Campos de Control Interno y Ventas (Para Notas de Venta y Facturación)
   vendedor            String?   @db.VarChar(100)
@@ -126,19 +177,20 @@ model Comprobante {
   comprobantesDestino ComprobanteRelacion[] @relation("OrigenRelacion")
   
   cuotas              ComprobanteCuota[]
-  pagos               Pago[] // Mantendremos esta relación directa por compatibilidad, pero la lógica fuerte irá en aplicaciones
+  pagos               Pago[]
 
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
   @@map("comprobantes")
-  @@unique([serie, correlativo, tipo])
+  @@unique([empresaId, serie, correlativo, tipo])
 }
-
-
 
 model Cotizacion {
   id              Int       @id @default(autoincrement())
+  empresaId       String    @map("empresa_id") @db.Uuid // AISLAMIENTO MULTITENANT
+  empresa         Empresa   @relation(fields: [empresaId], references: [id])
+  
   numero          String    @unique
   fechaEmision    DateTime  @default(now()) @map("fecha_emision")
   validezDias     Int       @default(7) @map("validez_dias")
@@ -160,6 +212,9 @@ model Cotizacion {
 
 model Pedido {
   id              Int       @id @default(autoincrement())
+  empresaId       String    @map("empresa_id") @db.Uuid // AISLAMIENTO MULTITENANT
+  empresa         Empresa   @relation(fields: [empresaId], references: [id])
+  
   numero          String    @unique
   fechaEmision    DateTime  @default(now()) @map("fecha_emision")
   fechaEntrega    DateTime? @map("fecha_entrega")
@@ -210,8 +265,12 @@ model OrdenCompraDetalle {
   ordenCompraId   String      @map("orden_compra_id") @db.Uuid
   ordenCompra     OrdenCompra @relation(fields: [ordenCompraId], references: [id], onDelete: Cascade)
   
-  productoId      Int         @map("producto_id")
-  producto        Producto    @relation(fields: [productoId], references: [id])
+  productoId      Int?        @map("producto_id")
+  producto        Producto?   @relation(fields: [productoId], references: [id])
+  
+  // Snapshots Inmutables (NUEVO)
+  codigoProducto  String?     @map("codigo_producto")
+  descripcion     String
   
   cantidad        Decimal     @db.Decimal(10, 2)
   cantidadRecibida Decimal    @default(0) @map("cantidad_recibida") @db.Decimal(10, 2)
@@ -329,7 +388,6 @@ model MovimientoKardex {
   @@map("inv_kardex")
 }
 
-
 model ComprobanteDetalle {
   id              Int         @id @default(autoincrement())
   comprobanteId   String      @map("comprobante_id") @db.Uuid
@@ -338,7 +396,10 @@ model ComprobanteDetalle {
   productoId      Int?        @map("producto_id")
   producto        Producto?   @relation(fields: [productoId], references: [id])
   
+  // Snapshots inmutables (NUEVO)
+  codigoProducto  String?     @map("codigo_producto")
   descripcion     String
+  
   cantidad        Decimal     @db.Decimal(10, 2)
   precioUnitario  Decimal     @map("precio_unitario") @db.Decimal(12, 2)
   valorUnitario   Decimal     @map("valor_unitario") @db.Decimal(12, 2)
@@ -369,6 +430,9 @@ model CajaCuenta {
 
 model Pago {
   id              Int         @id @default(autoincrement())
+  empresaId       String      @map("empresa_id") @db.Uuid // AISLAMIENTO MULTITENANT
+  empresa         Empresa     @relation(fields: [empresaId], references: [id])
+  
   comprobanteId   String      @map("comprobante_id") @db.Uuid
   cuentaId        Int         @map("cuenta_id")
   clienteId       Int         @map("cliente_id")
@@ -436,6 +500,7 @@ model PagoAplicacion {
 
 model ClienteSaldo {
   id              Int         @id @default(autoincrement())
+  empresaId       String      @map("empresa_id") @db.Uuid // AISLAMIENTO MULTITENANT
   clienteId       Int         @map("cliente_id") @unique
   saldoAFavor     Decimal     @default(0) @db.Decimal(12, 2) @map("saldo_a_favor")
   

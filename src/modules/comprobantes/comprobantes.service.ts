@@ -124,24 +124,27 @@ export class ComprobantesService {
     };
   }
 
-  async create(data: any) {
-    // IMPORTANTE: En un entorno real, el EmpresaId viene del usuario logueado (JWT)
-    // Como estamos en desarrollo, creamos/buscamos una empresa inicial
-    let empresa = await this.prisma.empresa.findFirst();
+  async create(empresaId: string, data: any) {
+    let empresa = await this.prisma.empresa.findUnique({ where: { id: empresaId } });
     if (!empresa) {
-      empresa = await this.prisma.empresa.create({
-        data: { ruc: "20123456789", razonSocial: "Empresa de Prueba" }
-      });
+      throw new BadRequestException('Empresa no encontrada');
+    }
+
+    // Bloquear si no hay certificado (y no es nota de venta)
+    if (data.tipo !== TIPOS_COMPROBANTE.NOTA_VENTA && data.tipo !== 'NV') {
+      if (!empresa.certificadoBase64) {
+        throw new BadRequestException('No cuentas con un certificado digital configurado. Sube tu archivo .p12 en la Configuración de Empresa para emitir facturas y boletas.');
+      }
     }
 
     // Buscar o crear el cliente al vuelo usando el RUC enviado desde el frontend
-    let cliente = await this.prisma.cliente.findUnique({ where: { ruc: data.clienteRuc } });
+    let cliente = await this.prisma.cliente.findUnique({ where: { empresaId_ruc: { empresaId: empresa.id, ruc: data.clienteRuc } } });
     if (!cliente) {
       // Si la base de datos está vacía, asegurarnos de que exista un Tipo de Cliente
-      let tipoCliente = await this.prisma.tipoCliente.findFirst();
+      let tipoCliente = await this.prisma.tipoCliente.findFirst({ where: { empresaId: empresa.id } });
       if (!tipoCliente) {
         tipoCliente = await this.prisma.tipoCliente.create({
-          data: { nombre: 'General', descripcion: 'Tipo de cliente por defecto' }
+          data: { nombre: 'General', descripcion: 'Tipo de cliente por defecto', empresaId: empresa.id }
         });
       }
 
@@ -149,7 +152,8 @@ export class ComprobantesService {
         data: {
           ruc: data.clienteRuc,
           razonSocial: data.clienteNombre || "Cliente sin nombre",
-          tipoClienteId: tipoCliente.id
+          tipoClienteId: tipoCliente.id,
+          empresaId: empresa.id
         }
       });
     } else if (data.clienteNombre && cliente.razonSocial !== data.clienteNombre) {
@@ -269,12 +273,18 @@ export class ComprobantesService {
     return result;
   }
 
-  async consolidar(data: { notasVentaIds: string[], clienteId: number, tipoComprobante: string, serie: string }) {
+  async consolidar(data: { empresaId: string, notasVentaIds: string[], clienteId: number, tipoComprobante: string, serie: string }) {
+    let empresa = await this.prisma.empresa.findUnique({ where: { id: data.empresaId } });
+    if (!empresa?.certificadoBase64 && data.tipoComprobante !== 'NV') {
+      throw new BadRequestException('No cuentas con un certificado digital configurado. Sube tu archivo .p12 en la Configuración de Empresa para consolidar en facturas o boletas.');
+    }
+
     return await this.prisma.$transaction(async (tx) => {
       // 1. Obtener Notas de Venta a consolidar
       const notas = await tx.comprobante.findMany({
         where: {
           id: { in: data.notasVentaIds },
+          empresaId: data.empresaId, // Filtro multitenant
           tipo: 'NV',
         },
         include: {
@@ -311,8 +321,7 @@ export class ComprobantesService {
         }
       }
 
-      // Empresa temporal (la primera de las notas)
-      const empresaId = notas[0].empresaId || "8e9e52f6-c687-44d2-988d-4b5d53062aca"; // FIXME: Obtener de sesión/usuario
+      const empresaId = data.empresaId; // Obtenido directamente del request guardado en jwt
 
       // 3. Generar Correlativo para Factura/Boleta
       let serieConfig = await tx.serieConfig.findUnique({

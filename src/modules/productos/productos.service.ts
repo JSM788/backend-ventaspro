@@ -32,6 +32,9 @@ export class ProductosService {
         stock: data.stockInicial ? Number(data.stockInicial) : 0,
         codigoInterno: data.codigoInterno,
         codigoSunat: data.codigoSunat,
+      },
+      include: {
+        empresa: true
       }
     });
   }
