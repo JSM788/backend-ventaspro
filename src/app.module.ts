@@ -16,11 +16,14 @@ import { InventarioModule } from './modules/inventario/inventario.module';
 import { ComprasModule } from './modules/compras/compras.module';
 import { AuthModule } from './core/auth/auth.module';
 
+import { CategoriasModule } from './modules/categorias/categorias.module';
+import { MarcasModule } from './modules/marcas/marcas.module';
+
 import { APP_GUARD } from '@nestjs/core';
 import { TenantGuard } from './core/auth/tenant.guard';
 
 @Module({
-  imports: [DatabaseModule, ClientesModule, ComprobantesModule, NotasVentaModule, CotizacionesModule, PedidosModule, EmpresasModule, StorageModule, SeriesModule, ProductosModule, FinanzasModule, InventarioModule, ComprasModule, AuthModule],
+  imports: [DatabaseModule, ClientesModule, ComprobantesModule, NotasVentaModule, CotizacionesModule, PedidosModule, EmpresasModule, StorageModule, SeriesModule, ProductosModule, FinanzasModule, InventarioModule, ComprasModule, AuthModule, CategoriasModule, MarcasModule],
   controllers: [AppController],
   providers: [
     AppService,

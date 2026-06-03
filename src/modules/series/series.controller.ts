@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, ParseIntPipe, Query } from '@nestjs/common';
 import { SeriesService } from './series.service';
 
 @Controller('series')
@@ -6,8 +6,8 @@ export class SeriesController {
   constructor(private readonly seriesService: SeriesService) {}
 
   @Get()
-  getAll() {
-    return this.seriesService.getAll();
+  getAll(@Query('tipo') tipo?: string) {
+    return this.seriesService.getAll(tipo);
   }
 
   @Post()

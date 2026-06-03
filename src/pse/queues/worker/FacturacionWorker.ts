@@ -19,7 +19,7 @@ export const FacturacionWorker = new Worker(
 
         const comprobante = await db.comprobante.findUnique({
             where: { id: comprobanteId },
-            include: { empresa: true, cliente: true, detalles: true }
+            include: { empresa: true, cliente: true, detalles: true, cuotas: true }
         });
 
         if (!comprobante) return;

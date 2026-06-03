@@ -2,6 +2,7 @@ import {
   Controller, 
   Get, 
   Post, 
+  Put,
   Body, 
   Param, 
   Delete, 
@@ -25,6 +26,11 @@ export class ProductosController {
   @Get()
   getAll() {
     return this.productosService.findAll();
+  }
+
+  @Get(':id')
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.productosService.findOne(id);
   }
 
   @Post()
@@ -62,6 +68,11 @@ export class ProductosController {
     }
     
     return { success: true, productoId: producto.id };
+  }
+
+  @Put(':id')
+  update(@Param('id', ParseIntPipe) id: number, @Body() data: any) {
+    return this.productosService.update(id, data);
   }
 
   @Delete(':id')

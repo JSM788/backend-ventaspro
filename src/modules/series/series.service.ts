@@ -5,13 +5,16 @@ import { PrismaService } from '../../core/database/prisma.service';
 export class SeriesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getAll() {
+  async getAll(tipo?: string) {
     // Por ahora usamos la empresa de prueba (multitenant futuro)
     const empresa = await this.prisma.empresa.findFirst();
     if (!empresa) throw new BadRequestException('Empresa no encontrada');
 
     return this.prisma.serieConfig.findMany({
-      where: { empresaId: empresa.id },
+      where: { 
+        empresaId: empresa.id,
+        ...(tipo ? { tipoComprobante: tipo } : {})
+      },
       orderBy: { serie: 'asc' },
     });
   }

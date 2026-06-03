@@ -198,6 +198,7 @@ export class ComprobantesService {
           empresaId: empresa.id,
           transaccionId,
           tipo: data.tipo,
+          tipoOperacion: data.tipoOperacion || '0101',
           serie: data.serie,
           correlativo: nuevoCorrelativo,
           fechaEmision: new Date(data.fechaEmision),
@@ -224,9 +225,9 @@ export class ComprobantesService {
               cantidad: d.cantidad,
               precioUnitario: d.precioUnitario,
               valorUnitario: d.valorUnitario,
-              igv: (d.cantidad * d.precioUnitario) - (d.cantidad * d.valorUnitario),
-              subtotal: d.cantidad * d.valorUnitario,
-              total: d.cantidad * d.precioUnitario
+              igv: d.igv,
+              subtotal: d.subtotal,
+              total: d.total
             }))
           }
         }

@@ -41,6 +41,7 @@ model Empresa {
   series              SerieConfig[]
   productos           Producto[]
   categorias          Categoria[]
+  marcas              Marca[]
   cajasCuentas        CajaCuenta[]
   almacenes           Almacen[]
   ordenesCompra       OrdenCompra[]
@@ -140,6 +141,7 @@ model Comprobante {
   transaccionId       String   @unique @map("transaccion_id") @db.VarChar(50)
   
   tipo                String    // '01' Factura, '03' Boleta, '07' NC, '08' ND
+  tipoOperacion       String    @default("0101") @map("tipo_operacion") @db.VarChar(4)
   serie               String    @db.VarChar(4)
   correlativo         Int
   fechaEmision        DateTime  @default(now()) @map("fecha_emision")
@@ -313,6 +315,20 @@ model Categoria {
   @@map("categorias")
 }
 
+model Marca {
+  id          Int        @id @default(autoincrement())
+  empresaId   String     @map("empresa_id") @db.Uuid
+  empresa     Empresa    @relation(fields: [empresaId], references: [id])
+  nombre      String
+  descripcion String?
+  productos   Producto[]
+
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@map("marcas")
+}
+
 model Producto {
   id              Int        @id @default(autoincrement())
   empresaId       String     @map("empresa_id") @db.Uuid
@@ -332,6 +348,9 @@ model Producto {
   codigoSunat     String?    @map("codigo_sunat")
   
   imagenUrl       String?    @map("imagen_url")
+  
+  marcaId         Int?       @map("marca_id")
+  marca           Marca?     @relation(fields: [marcaId], references: [id])
   
   categoriaId     Int?       @map("categoria_id")
   categoria       Categoria? @relation(fields: [categoriaId], references: [id])

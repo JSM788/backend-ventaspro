@@ -63,6 +63,28 @@ export class InvoiceBuilder {
 
         const correlativoStr = String(comprobante.correlativo).padStart(7, '0');
 
+        const isCredito = comprobante.condicionPago?.toUpperCase() === 'CREDITO';
+        
+        let paymentTermsStr = `
+    <cac:PaymentTerms>
+        <cbc:ID>FormaPago</cbc:ID>
+        <cbc:PaymentMeansID>${isCredito ? 'Credito' : 'Contado'}</cbc:PaymentMeansID>${isCredito ? `\n        <cbc:Amount currencyID="${comprobante.moneda}">${total}</cbc:Amount>` : ''}
+    </cac:PaymentTerms>`;
+
+        if (isCredito && comprobante.cuotas && comprobante.cuotas.length > 0) {
+            comprobante.cuotas.forEach((cuota: any, index: number) => {
+                const fechaCuota = cuota.fechaVencimiento.toISOString().split('T')[0];
+                const montoCuota = Number(cuota.monto).toFixed(2);
+                paymentTermsStr += `
+    <cac:PaymentTerms>
+        <cbc:ID>FormaPago</cbc:ID>
+        <cbc:PaymentMeansID>Cuota${String(index + 1).padStart(3, '0')}</cbc:PaymentMeansID>
+        <cbc:Amount currencyID="${comprobante.moneda}">${montoCuota}</cbc:Amount>
+        <cbc:PaymentDueDate>${fechaCuota}</cbc:PaymentDueDate>
+    </cac:PaymentTerms>`;
+            });
+        }
+
         return `<?xml version="1.0" encoding="UTF-8"?>
 <Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
     xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
@@ -75,7 +97,7 @@ export class InvoiceBuilder {
     </ext:UBLExtensions>
     <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
     <cbc:CustomizationID>2.0</cbc:CustomizationID>
-    <cbc:ProfileID schemeName="Tipo de Operacion" schemeAgencyName="PE:SUNAT" schemeURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo51">0101</cbc:ProfileID>
+    <cbc:ProfileID schemeName="Tipo de Operacion" schemeAgencyName="PE:SUNAT" schemeURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo51">${comprobante.tipoOperacion || '0101'}</cbc:ProfileID>
     <cbc:ID>${comprobante.serie}-${correlativoStr}</cbc:ID>
     <cbc:IssueDate>${fechaEmision}</cbc:IssueDate>
     <cbc:IssueTime>${horaEmision}</cbc:IssueTime>
@@ -118,10 +140,7 @@ export class InvoiceBuilder {
             </cac:PartyLegalEntity>
         </cac:Party>
     </cac:AccountingCustomerParty>
-    <cac:PaymentTerms>
-        <cbc:ID>FormaPago</cbc:ID>
-        <cbc:PaymentMeansID>${comprobante.condicionPago === 'CREDITO' ? 'Credito' : 'Contado'}</cbc:PaymentMeansID>
-    </cac:PaymentTerms>
+${paymentTermsStr}
     <cac:TaxTotal>
         <cbc:TaxAmount currencyID="${comprobante.moneda}">${totalIgv}</cbc:TaxAmount>
         <cac:TaxSubtotal>
