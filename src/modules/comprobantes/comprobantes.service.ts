@@ -201,7 +201,7 @@ export class ComprobantesService {
           tipoOperacion: data.tipoOperacion || '0101',
           serie: data.serie,
           correlativo: nuevoCorrelativo,
-          fechaEmision: new Date(data.fechaEmision),
+          fechaEmision: data.fechaEmision ? new Date(data.fechaEmision) : new Date(),
           clienteId: cliente.id,
           moneda: data.moneda,
           operacionGravada: data.operacionGravada,
@@ -262,14 +262,19 @@ export class ComprobantesService {
       return nuevoComprobante;
     });
 
-    // 2. Empujar el Trabajo a la Cola BullMQ
-    // Esto despierta al FacturacionWorker para que mande el XML
-    await FacturacionQueue.add('emitir-comprobante', {
-      comprobanteId: result.id
-    }, {
-      attempts: 3, // Reintentar 3 veces si la SUNAT está caída
-      backoff: { type: 'exponential', delay: 2000 } // Esperar 2s, 4s, 8s entre intentos
-    });
+    // 2. Empujar el Trabajo a la Cola BullMQ solo si va para SUNAT (Factura o Boleta)
+    if (result.tipo !== 'NV' && result.tipo !== TIPOS_COMPROBANTE.NOTA_VENTA) {
+      try {
+        await FacturacionQueue.add('emitir-comprobante', {
+          comprobanteId: result.id
+        }, {
+          attempts: 3, // Reintentar 3 veces si la SUNAT está caída
+          backoff: { type: 'exponential', delay: 2000 } // Esperar 2s, 4s, 8s entre intentos
+        });
+      } catch (error) {
+        console.warn("⚠️ No se pudo encolar a Facturación. Verifica que Redis esté corriendo:", error.message);
+      }
+    }
 
     return result;
   }

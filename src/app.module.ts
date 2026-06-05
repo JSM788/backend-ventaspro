@@ -21,9 +21,10 @@ import { MarcasModule } from './modules/marcas/marcas.module';
 
 import { APP_GUARD } from '@nestjs/core';
 import { TenantGuard } from './core/auth/tenant.guard';
+import { CajasTurnosModule } from './modules/cajas-turnos/cajas-turnos.module';
 
 @Module({
-  imports: [DatabaseModule, ClientesModule, ComprobantesModule, NotasVentaModule, CotizacionesModule, PedidosModule, EmpresasModule, StorageModule, SeriesModule, ProductosModule, FinanzasModule, InventarioModule, ComprasModule, AuthModule, CategoriasModule, MarcasModule],
+  imports: [DatabaseModule, ClientesModule, ComprobantesModule, NotasVentaModule, CotizacionesModule, PedidosModule, EmpresasModule, StorageModule, SeriesModule, ProductosModule, FinanzasModule, InventarioModule, ComprasModule, AuthModule, CategoriasModule, MarcasModule, CajasTurnosModule],
   controllers: [AppController],
   providers: [
     AppService,

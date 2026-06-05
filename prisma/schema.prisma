@@ -50,6 +50,7 @@ model Empresa {
   pedidos             Pedido[]
   pagos               Pago[]
   tiposCliente        TipoCliente[]
+  turnosCaja          CajaTurno[]
   
   createdAt           DateTime @default(now()) @map("created_at")
   
@@ -440,6 +441,7 @@ model CajaCuenta {
   estado      String   @default("ACTIVO")
   
   pagos       Pago[]   // Relación con los pagos que entran aquí
+  turnosCaja  CajaTurno[]
 
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -525,4 +527,47 @@ model ClienteSaldo {
   
   cliente         Cliente     @relation(fields: [clienteId], references: [id])
   @@map("clientes_saldos")
+}
+
+model CajaTurno {
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  empresaId       String      @map("empresa_id") @db.Uuid
+  empresa         Empresa     @relation(fields: [empresaId], references: [id])
+  
+  usuarioId       String      @map("usuario_id")
+  // usuario         UsuarioErp  @relation(fields: [usuarioId], references: [id]) // Asumiendo que el cajero es UsuarioErp
+  
+  cajaCuentaId    Int         @map("caja_cuenta_id")
+  cajaCuenta      CajaCuenta  @relation(fields: [cajaCuentaId], references: [id])
+  
+  fechaApertura   DateTime    @default(now()) @map("fecha_apertura")
+  fechaCierre     DateTime?   @map("fecha_cierre")
+  
+  montoInicial    Decimal     @default(0) @db.Decimal(12, 2) @map("monto_inicial")
+  montoEfectivo   Decimal     @default(0) @db.Decimal(12, 2) @map("monto_efectivo")
+  montoArqueado   Decimal     @default(0) @db.Decimal(12, 2) @map("monto_arqueado")
+  diferencia      Decimal     @default(0) @db.Decimal(12, 2) // Si falta plata es negativo, si sobra positivo
+  
+  estado          String      @default("ABIERTO") // ABIERTO, CERRADO
+  observaciones   String?     @db.Text
+  
+  movimientos     CajaMovimiento[]
+  
+  @@map("cajas_turnos")
+}
+
+model CajaMovimiento {
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  turnoId         String      @map("turno_id") @db.Uuid
+  turno           CajaTurno   @relation(fields: [turnoId], references: [id])
+  
+  tipo            String      // INGRESO, EGRESO
+  monto           Decimal     @db.Decimal(12, 2)
+  descripcion     String
+  fecha           DateTime    @default(now())
+  
+  // Opcionalmente podemos vincularlo al comprobante o pago que originó el ingreso
+  // pagoId       Int?
+  
+  @@map("cajas_movimientos")
 }
