@@ -215,3 +215,14 @@ async function procesarPorNubefact(comprobanteId: string) {
 async function notificarDesarrollador(txId: string, errorMsg: string) {
     console.log(`[ALERT] Webhook/Slack: Enviar notificación a desarrollo para parche de emergencia en TX: ${txId}. Motivo: ${errorMsg}`);
 }
+
+// ---------------------------------------------------------
+// MANEJO DE ERRORES GLOBALES PARA EVITAR CRASH DEL SERVIDOR
+// ---------------------------------------------------------
+connection.on('error', (err) => {
+    console.warn(`[Redis] Advertencia de conexión (Ignorado en modo MVP): ${err.message}`);
+});
+
+FacturacionWorker.on('error', (err) => {
+    console.error(`[BullMQ Worker] Error en el worker (Ignorado en modo MVP): ${err.message}`);
+});
