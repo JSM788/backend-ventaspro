@@ -21,81 +21,204 @@ enum ViaEmision {
   NUBEFACT
 }
 
+enum EstadoEmpresa {
+  ACTIVO
+  SUSPENDIDO
+  ELIMINADO
+}
+
 model Empresa {
-  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  ruc                 String   @unique @db.VarChar(11)
-  slug                String   @unique @db.VarChar(100) // Restaurado porque se usa como tenantKey
-  razonSocial         String   @map("razon_social") @db.VarChar(255)
-  certificadoUrl      String?  @map("certificado_url")
-  certificadoPassword String?  @map("certificado_password")
-  certificadoBase64   String?  @map("certificado_base64")
-  sunatUsuario        String?  @map("sunat_usuario")
-  sunatClave          String?  @map("sunat_clave")
-  logoClaro           String?  @map("logo_claro")   // Path relativo: empresas/{id}/logo-claro.webp
-  logoOscuro          String?  @map("logo_oscuro")  // Path relativo: empresas/{id}/logo-oscuro.webp
-  
-  usuariosErp         UsuarioErp[]
-  perfiles            Perfil[]
-  
-  comprobantes        Comprobante[]
-  series              SerieConfig[]
-  productos           Producto[]
-  categorias          Categoria[]
-  marcas              Marca[]
-  cajasCuentas        CajaCuenta[]
-  almacenes           Almacen[]
-  ordenesCompra       OrdenCompra[]
-  clientes            Cliente[]
-  cotizaciones        Cotizacion[]
-  pedidos             Pedido[]
-  pagos               Pago[]
-  tiposCliente        TipoCliente[]
-  turnosCaja          CajaTurno[]
-  
-  createdAt           DateTime @default(now()) @map("created_at")
-  
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ruc         String        @unique @db.VarChar(11)
+  slug        String        @unique @db.VarChar(100) // Restaurado porque se usa como tenantKey
+  razonSocial String        @map("razon_social") @db.VarChar(255)
+  logoClaro   String?       @map("logo_claro")
+  logoOscuro  String?       @map("logo_oscuro")
+  estado      EstadoEmpresa @default(ACTIVO)
+
+  tipoNegocioId String?      @map("tipo_negocio_id")
+  tipoNegocio   TipoNegocio? @relation(fields: [tipoNegocioId], references: [id])
+
+  planId String? @map("plan_id")
+  plan   Plan?   @relation(fields: [planId], references: [id])
+
+  limite EmpresaLimite?
+  addons EmpresaAddOn[]
+
+  usuariosErp UsuarioErp[]
+  modulos     EmpresaModulo[]
+  roles       Rol[]
+  logs        AuditoriaLog[]
+
+  comprobantes  Comprobante[]
+  series        SerieConfig[]
+  productos     Producto[]
+  categorias    Categoria[]
+  marcas        Marca[]
+  cajasCuentas  CajaCuenta[]
+  almacenes     Almacen[]
+  ordenesCompra OrdenCompra[]
+  clientes      Cliente[]
+  cotizaciones  Cotizacion[]
+  pedidos       Pedido[]
+  pagos         Pago[]
+  tiposCliente  TipoCliente[]
+  turnosCaja    CajaTurno[]
+
+  createdAt     DateTime       @default(now()) @map("created_at")
+  unidadMedidas UnidadMedida[]
+
   @@map("empresas")
 }
 
 // --- IDENTITY & RBAC ---
 
 model UsuarioErp {
-  id             String   @id @default(uuid())
-  authUserId     String   @unique @map("auth_user_id") // Viene del IDP externo
-  email          String
-  isSuperAdmin   Boolean  @default(false) @map("is_super_admin")
-  
-  empresaId      String?  @map("empresa_id") @db.Uuid
-  empresa        Empresa? @relation(fields: [empresaId], references: [id])
-  
-  perfilId       String?  @map("perfil_id")
-  perfil         Perfil?  @relation(fields: [perfilId], references: [id])
+  id           String  @id @default(uuid())
+  authUserId   String  @unique @map("auth_user_id") // Viene del IDP externo
+  email        String
+  password     String? // [MOCK AUTH] Temporal hasta que entre Nexus
+  isSuperAdmin Boolean @default(false) @map("is_super_admin")
 
-  createdAt      DateTime @default(now()) @map("created_at")
+  empresaId String?  @map("empresa_id") @db.Uuid
+  empresa   Empresa? @relation(fields: [empresaId], references: [id])
+
+  roles UsuarioRol[]
+  logs  AuditoriaLog[]
+
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@map("usuarios_erp")
 }
 
-model Perfil {
-  id             String   @id @default(uuid())
-  empresaId      String   @map("empresa_id") @db.Uuid
-  empresa        Empresa  @relation(fields: [empresaId], references: [id])
-  
-  nombre         String   // Ej. "Cajero Turno Tarde"
-  permisos       Json     @default("[]") // JSONB Array ["ventas.crear", "inventario.ver"]
-  
-  usuarios       UsuarioErp[]
+model Modulo {
+  id          String   @id @default(uuid())
+  codigo      String   @unique // Ej: "POS", "INVENTARIO", "FINANZAS"
+  nombre      String
+  descripcion String?
+  padreId     String?  @map("padre_id") // Para anidar (Restaurante -> Facturación)
+  padre       Modulo?  @relation("ModuloPadre", fields: [padreId], references: [id])
+  subModulos  Modulo[] @relation("ModuloPadre")
 
-  @@map("perfiles")
+  tiposNegocio TipoNegocioModulo[]
+  empresas     EmpresaModulo[]
+  permisos     Permiso[]
+
+  @@map("modulos")
+}
+
+model TipoNegocio {
+  id          String  @id @default(uuid())
+  codigo      String  @unique // Ej: "RESTAURANTE", "BODEGA", "FARMACIA"
+  nombre      String
+  descripcion String?
+
+  modulos  TipoNegocioModulo[]
+  empresas Empresa[]
+
+  @@map("tipos_negocio")
+}
+
+model TipoNegocioModulo {
+  tipoNegocioId String @map("tipo_negocio_id")
+  moduloId      String @map("modulo_id")
+
+  tipoNegocio TipoNegocio @relation(fields: [tipoNegocioId], references: [id], onDelete: Cascade)
+  modulo      Modulo      @relation(fields: [moduloId], references: [id], onDelete: Cascade)
+
+  esObligatorio Boolean @default(true) @map("es_obligatorio")
+
+  @@id([tipoNegocioId, moduloId])
+  @@map("tipo_negocio_modulos")
+}
+
+model EmpresaModulo {
+  empresaId String @map("empresa_id") @db.Uuid
+  moduloId  String @map("modulo_id")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  modulo  Modulo  @relation(fields: [moduloId], references: [id], onDelete: Cascade)
+
+  activo Boolean @default(true)
+
+  @@id([empresaId, moduloId])
+  @@map("empresa_modulos")
+}
+
+model Permiso {
+  id          String  @id @default(uuid())
+  moduloId    String  @map("modulo_id")
+  codigo      String  @unique // Ej: "facturas.crear", "caja.abrir"
+  nombre      String
+  descripcion String?
+
+  modulo Modulo       @relation(fields: [moduloId], references: [id], onDelete: Cascade)
+  roles  RolPermiso[]
+
+  @@map("permisos")
+}
+
+model Rol {
+  id        String   @id @default(uuid())
+  empresaId String?  @map("empresa_id") @db.Uuid // Null si es un Rol base global
+  empresa   Empresa? @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  nombre      String // Ej. "Cajero", "Admin"
+  descripcion String?
+
+  permisos RolPermiso[]
+  usuarios UsuarioRol[]
+
+  @@map("roles")
+}
+
+model RolPermiso {
+  rolId     String @map("rol_id")
+  permisoId String @map("permiso_id")
+
+  rol     Rol     @relation(fields: [rolId], references: [id], onDelete: Cascade)
+  permiso Permiso @relation(fields: [permisoId], references: [id], onDelete: Cascade)
+
+  @@id([rolId, permisoId])
+  @@map("rol_permisos")
+}
+
+model UsuarioRol {
+  usuarioId String @map("usuario_id")
+  rolId     String @map("rol_id")
+
+  usuario UsuarioErp @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  rol     Rol        @relation(fields: [rolId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, rolId])
+  @@map("usuario_roles")
+}
+
+model AuditoriaLog {
+  id        String  @id @default(uuid())
+  empresaId String? @map("empresa_id") @db.Uuid
+  usuarioId String  @map("usuario_id")
+  accion    String // Ej: "impersonation_start", "factura_anulada"
+  entidad   String? // Tabla afectada
+  entidadId String?
+  detalles  Json? // Datos extra
+  ip        String?
+
+  empresa Empresa?   @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  usuario UsuarioErp @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  fecha DateTime @default(now())
+
+  @@map("auditoria_logs")
 }
 
 // --- TABLAS CON AISLAMIENTO MULTITENANT ---
 
 model TipoCliente {
-  id          Int       @id @default(autoincrement())
-  empresaId   String?   @map("empresa_id") @db.Uuid
-  empresa     Empresa?  @relation(fields: [empresaId], references: [id])
-  
+  id        Int      @id @default(autoincrement())
+  empresaId String?  @map("empresa_id") @db.Uuid
+  empresa   Empresa? @relation(fields: [empresaId], references: [id])
+
   nombre      String    @unique
   descripcion String?
   createdAt   DateTime  @default(now())
@@ -106,10 +229,10 @@ model TipoCliente {
 }
 
 model Cliente {
-  id            Int          @id @default(autoincrement())
-  empresaId     String       @map("empresa_id") @db.Uuid // AISLAMIENTO MULTITENANT
-  empresa       Empresa      @relation(fields: [empresaId], references: [id])
-  
+  id        Int     @id @default(autoincrement())
+  empresaId String  @map("empresa_id") @db.Uuid // AISLAMIENTO MULTITENANT
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+
   razonSocial   String       @map("razon_social")
   ruc           String
   email         String?
@@ -119,184 +242,184 @@ model Cliente {
   tipoCliente   TipoCliente? @relation(fields: [tipoClienteId], references: [id])
   estado        String       @default("ACTIVO")
   esProveedor   Boolean      @default(false) @map("es_proveedor")
-  
+
   comprobantes  Comprobante[]
   cotizaciones  Cotizacion[]
   pedidos       Pedido[]
   pagos         Pago[]
   saldo         ClienteSaldo?
   ordenesCompra OrdenCompra[]
-  
-  createdAt     DateTime     @default(now()) @map("created_at")
-  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([empresaId, ruc]) // El RUC es único solo DENTRO de la empresa
   @@map("clientes") // Se mantiene nombre de tabla por ahora para no romper backend masivamente
 }
 
 model Comprobante {
-  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  empresaId           String?  @map("empresa_id") @db.Uuid
-  empresa             Empresa? @relation(fields: [empresaId], references: [id])
-  
-  transaccionId       String   @unique @map("transaccion_id") @db.VarChar(50)
-  
-  tipo                String    // '01' Factura, '03' Boleta, '07' NC, '08' ND
-  tipoOperacion       String    @default("0101") @map("tipo_operacion") @db.VarChar(4)
-  serie               String    @db.VarChar(4)
-  correlativo         Int
-  fechaEmision        DateTime  @default(now()) @map("fecha_emision")
-  clienteId           Int       @map("cliente_id")
-  cliente             Cliente   @relation(fields: [clienteId], references: [id])
-  moneda              String    @default("PEN")
-  
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  empresaId String?  @map("empresa_id") @db.Uuid
+  empresa   Empresa? @relation(fields: [empresaId], references: [id])
+
+  transaccionId String @unique @map("transaccion_id") @db.VarChar(50)
+
+  tipo          String // '01' Factura, '03' Boleta, '07' NC, '08' ND
+  tipoOperacion String   @default("0101") @map("tipo_operacion") @db.VarChar(4)
+  serie         String   @db.VarChar(4)
+  correlativo   Int
+  fechaEmision  DateTime @default(now()) @map("fecha_emision")
+  clienteId     Int      @map("cliente_id")
+  cliente       Cliente  @relation(fields: [clienteId], references: [id])
+  moneda        String   @default("PEN")
+
   // Totales SUNAT
-  operacionGravada    Decimal   @default(0) @db.Decimal(12, 2) @map("operacion_gravada")
-  operacionExonerada  Decimal   @default(0) @db.Decimal(12, 2) @map("operacion_exonerada")
-  operacionInafecta   Decimal   @default(0) @db.Decimal(12, 2) @map("operacion_inafecta")
-  igv                 Decimal   @default(0) @db.Decimal(12, 2)
-  total               Decimal   @db.Decimal(12, 2) @map("monto_total")
-  
+  operacionGravada   Decimal @default(0) @map("operacion_gravada") @db.Decimal(12, 2)
+  operacionExonerada Decimal @default(0) @map("operacion_exonerada") @db.Decimal(12, 2)
+  operacionInafecta  Decimal @default(0) @map("operacion_inafecta") @db.Decimal(12, 2)
+  igv                Decimal @default(0) @db.Decimal(12, 2)
+  total              Decimal @map("monto_total") @db.Decimal(12, 2)
+
   // Estado e Integración Híbrida
-  estadoSunat         EstadoSunat @default(PENDIENTE) @map("estado_sunat")
-  viaEmision          ViaEmision  @default(NATIVO) @map("via_emision")
-  
-  sunatCodeError      String?   @map("sunat_code_error") @db.VarChar(30)
-  sunatResponseMsg    String?   @map("sunat_response_msg") @db.Text
-  
-  pdfPath             String?   @map("pdf_path")
-  xmlPath             String?   @map("xml_path")
-  cdrPath             String?   @map("cdr_path")
-  
+  estadoSunat EstadoSunat @default(PENDIENTE) @map("estado_sunat")
+  viaEmision  ViaEmision  @default(NATIVO) @map("via_emision")
+
+  sunatCodeError   String? @map("sunat_code_error") @db.VarChar(30)
+  sunatResponseMsg String? @map("sunat_response_msg") @db.Text
+
+  pdfPath String? @map("pdf_path")
+  xmlPath String? @map("xml_path")
+  cdrPath String? @map("cdr_path")
+
   // Campos de Control Interno y Ventas (Para Notas de Venta y Facturación)
-  vendedor            String?   @db.VarChar(100)
-  condicionPago       String    @default("CONTADO") @map("condicion_pago")
-  estadoPago          String    @default("PAGADO") @map("estado_pago")
-  observaciones       String?   @db.Text
+  vendedor      String?              @db.VarChar(100)
+  condicionPago String               @default("CONTADO") @map("condicion_pago")
+  estadoPago    String               @default("PAGADO") @map("estado_pago")
+  observaciones String?              @db.Text
   // Relaciones Documentales y Financieras
-  detalles            ComprobanteDetalle[]
-  
+  detalles      ComprobanteDetalle[]
+
   comprobantesOrigen  ComprobanteRelacion[] @relation("DestinoRelacion")
   comprobantesDestino ComprobanteRelacion[] @relation("OrigenRelacion")
-  
-  cuotas              ComprobanteCuota[]
-  pagos               Pago[]
 
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @updatedAt @map("updated_at")
+  cuotas ComprobanteCuota[]
+  pagos  Pago[]
 
-  @@map("comprobantes")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   @@unique([empresaId, serie, correlativo, tipo])
+  @@map("comprobantes")
 }
 
 model Cotizacion {
-  id              Int       @id @default(autoincrement())
-  empresaId       String    @map("empresa_id") @db.Uuid // AISLAMIENTO MULTITENANT
-  empresa         Empresa   @relation(fields: [empresaId], references: [id])
-  
-  numero          String    @unique
-  fechaEmision    DateTime  @default(now()) @map("fecha_emision")
-  validezDias     Int       @default(7) @map("validez_dias")
-  clienteId       Int       @map("cliente_id")
-  cliente         Cliente   @relation(fields: [clienteId], references: [id])
-  moneda          String    @default("PEN")
-  total           Decimal   @db.Decimal(12, 2)
-  estado          String    @default("REGISTRADO") // REGISTRADO, ACEPTADO, ANULADO
-  entrega         String?   @map("estado_entrega")
-  comprobantes    String?   // Comprobantes vinculados
-  notasVenta      String?   @map("notas_venta")
-  vendedor        String?
-  registradoPor   String?   @map("registrado_por")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  id        Int     @id @default(autoincrement())
+  empresaId String  @map("empresa_id") @db.Uuid // AISLAMIENTO MULTITENANT
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+
+  numero        String   @unique
+  fechaEmision  DateTime @default(now()) @map("fecha_emision")
+  validezDias   Int      @default(7) @map("validez_dias")
+  clienteId     Int      @map("cliente_id")
+  cliente       Cliente  @relation(fields: [clienteId], references: [id])
+  moneda        String   @default("PEN")
+  total         Decimal  @db.Decimal(12, 2)
+  estado        String   @default("REGISTRADO") // REGISTRADO, ACEPTADO, ANULADO
+  entrega       String?  @map("estado_entrega")
+  comprobantes  String? // Comprobantes vinculados
+  notasVenta    String?  @map("notas_venta")
+  vendedor      String?
+  registradoPor String?  @map("registrado_por")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   @@map("cotizaciones")
 }
 
 model Pedido {
-  id              Int       @id @default(autoincrement())
-  empresaId       String    @map("empresa_id") @db.Uuid // AISLAMIENTO MULTITENANT
-  empresa         Empresa   @relation(fields: [empresaId], references: [id])
-  
-  numero          String    @unique
-  fechaEmision    DateTime  @default(now()) @map("fecha_emision")
-  fechaEntrega    DateTime? @map("fecha_entrega")
+  id        Int     @id @default(autoincrement())
+  empresaId String  @map("empresa_id") @db.Uuid // AISLAMIENTO MULTITENANT
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+
+  numero           String    @unique
+  fechaEmision     DateTime  @default(now()) @map("fecha_emision")
+  fechaEntrega     DateTime? @map("fecha_entrega")
   fechaVencimiento DateTime? @map("fecha_vencimiento")
-  clienteId       Int       @map("cliente_id")
-  cliente         Cliente   @relation(fields: [clienteId], references: [id])
-  moneda          String    @default("PEN")
-  total           Decimal   @db.Decimal(12, 2)
-  estado          String    @default("PENDIENTE") // PENDIENTE, ENTREGADO, ANULADO
-  estadoPago      String    @default("PENDIENTE") @map("estado_pago")
-  comprobantes    String?   
-  notasVenta      String?   @map("notas_venta")
-  vendedor        String?
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  clienteId        Int       @map("cliente_id")
+  cliente          Cliente   @relation(fields: [clienteId], references: [id])
+  moneda           String    @default("PEN")
+  total            Decimal   @db.Decimal(12, 2)
+  estado           String    @default("PENDIENTE") // PENDIENTE, ENTREGADO, ANULADO
+  estadoPago       String    @default("PENDIENTE") @map("estado_pago")
+  comprobantes     String?
+  notasVenta       String?   @map("notas_venta")
+  vendedor         String?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
 
   @@map("pedidos")
 }
 
 model OrdenCompra {
-  id              String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  empresaId       String             @map("empresa_id") @db.Uuid
-  empresa         Empresa            @relation(fields: [empresaId], references: [id])
-  
-  numero          String             @unique
-  fechaEmision    DateTime           @default(now()) @map("fecha_emision")
-  fechaEntrega    DateTime?          @map("fecha_entrega")
-  
-  proveedorId     Int                @map("proveedor_id")
-  proveedor       Cliente            @relation(fields: [proveedorId], references: [id])
-  
-  moneda          String             @default("PEN")
-  estado          String             @default("BORRADOR") // BORRADOR, CONFIRMADO, RECIBIDO, FACTURADO, CANCELADO
-  
-  total           Decimal            @db.Decimal(12, 2)
-  observaciones   String?            @db.Text
-  
-  detalles        OrdenCompraDetalle[]
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  empresaId String  @map("empresa_id") @db.Uuid
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
 
-  createdAt       DateTime           @default(now()) @map("created_at")
-  updatedAt       DateTime           @updatedAt @map("updated_at")
+  numero       String    @unique
+  fechaEmision DateTime  @default(now()) @map("fecha_emision")
+  fechaEntrega DateTime? @map("fecha_entrega")
+
+  proveedorId Int     @map("proveedor_id")
+  proveedor   Cliente @relation(fields: [proveedorId], references: [id])
+
+  moneda String @default("PEN")
+  estado String @default("BORRADOR") // BORRADOR, CONFIRMADO, RECIBIDO, FACTURADO, CANCELADO
+
+  total         Decimal @db.Decimal(12, 2)
+  observaciones String? @db.Text
+
+  detalles OrdenCompraDetalle[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("ordenes_compra")
 }
 
 model OrdenCompraDetalle {
-  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  ordenCompraId   String      @map("orden_compra_id") @db.Uuid
-  ordenCompra     OrdenCompra @relation(fields: [ordenCompraId], references: [id], onDelete: Cascade)
-  
-  productoId      Int?        @map("producto_id")
-  producto        Producto?   @relation(fields: [productoId], references: [id])
-  
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ordenCompraId String      @map("orden_compra_id") @db.Uuid
+  ordenCompra   OrdenCompra @relation(fields: [ordenCompraId], references: [id], onDelete: Cascade)
+
+  productoId Int?      @map("producto_id")
+  producto   Producto? @relation(fields: [productoId], references: [id])
+
   // Snapshots Inmutables (NUEVO)
-  codigoProducto  String?     @map("codigo_producto")
-  descripcion     String
-  
-  cantidad        Decimal     @db.Decimal(10, 2)
-  cantidadRecibida Decimal    @default(0) @map("cantidad_recibida") @db.Decimal(10, 2)
-  
-  precioUnitario  Decimal     @map("precio_unitario") @db.Decimal(12, 2)
-  subtotal        Decimal     @db.Decimal(12, 2)
-  
+  codigoProducto String? @map("codigo_producto")
+  descripcion    String
+
+  cantidad         Decimal @db.Decimal(10, 2)
+  cantidadRecibida Decimal @default(0) @map("cantidad_recibida") @db.Decimal(10, 2)
+
+  precioUnitario Decimal @map("precio_unitario") @db.Decimal(12, 2)
+  subtotal       Decimal @db.Decimal(12, 2)
+
   @@map("ordenes_compra_detalles")
 }
 
 model SerieConfig {
-  id                  Int      @id @default(autoincrement())
-  empresaId           String   @map("empresa_id") @db.Uuid
-  empresa             Empresa  @relation(fields: [empresaId], references: [id])
-  
-  tipoComprobante     String   @map("tipo_comprobante") @db.VarChar(2) // '01' Factura, '03' Boleta
-  serie               String   @db.VarChar(4) // Ej. 'F001'
-  ultimoCorrelativo   Int      @default(0) @map("ultimo_correlativo")
-  
-  estado              String   @default("ACTIVO") // ACTIVO, INACTIVO
-  
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  id        Int     @id @default(autoincrement())
+  empresaId String  @map("empresa_id") @db.Uuid
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+
+  tipoComprobante   String @map("tipo_comprobante") @db.VarChar(2) // '01' Factura, '03' Boleta
+  serie             String @db.VarChar(4) // Ej. 'F001'
+  ultimoCorrelativo Int    @default(0) @map("ultimo_correlativo")
+
+  estado String @default("ACTIVO") // ACTIVO, INACTIVO
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([empresaId, serie])
   @@map("serie_config")
@@ -310,8 +433,8 @@ model Categoria {
   descripcion String?
   productos   Producto[]
 
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("categorias")
 }
@@ -324,250 +447,399 @@ model Marca {
   descripcion String?
   productos   Producto[]
 
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("marcas")
 }
 
-model Producto {
-  id              Int        @id @default(autoincrement())
-  empresaId       String     @map("empresa_id") @db.Uuid
-  empresa         Empresa    @relation(fields: [empresaId], references: [id])
-  
-  tipo            String     @default("PRODUCTO") // PRODUCTO, SERVICIO, PACK
-  nombre          String
-  descripcion     String?
-  unidadMedida    String     @default("NIU") @map("unidad_medida") // NIU, ZZ
-  
-  precioUnitario  Decimal    @default(0) @db.Decimal(12, 2) @map("precio_unitario")
-  incluyeIgv      Boolean    @default(true) @map("incluye_igv")
-  tipoAfectacion  String     @default("10") @map("tipo_afectacion") // 10 = Gravado, 20 = Exonerado
-  
-  stock           Decimal    @default(0) @db.Decimal(12, 2)
-  codigoInterno   String?    @map("codigo_interno")
-  codigoSunat     String?    @map("codigo_sunat")
-  
-  imagenUrl       String?    @map("imagen_url")
-  
-  marcaId         Int?       @map("marca_id")
-  marca           Marca?     @relation(fields: [marcaId], references: [id])
-  
-  categoriaId     Int?       @map("categoria_id")
-  categoria       Categoria? @relation(fields: [categoriaId], references: [id])
+model UnidadMedida {
+  id        Int     @id @default(autoincrement())
+  empresaId String  @map("empresa_id") @db.Uuid
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
 
-  movimientosKardex MovimientoKardex[]
+  nombre      String // Ej: "Caja", "Docena", "Unidad"
+  abreviatura String  @db.VarChar(10) // Ej: "CJ", "DZ", "UN"
+  esBase      Boolean @default(false) @map("es_base") // Identifica si es la unidad mínima (Ej. UN)
+
+  productosBase        Producto[]                  @relation("ProductoUnidadBase")
+  unidadesAlternativas ProductoUnidadAlternativa[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([empresaId, abreviatura])
+  @@map("unidades_medida")
+}
+
+model ProductoUnidadAlternativa {
+  id         Int      @id @default(autoincrement())
+  productoId Int      @map("producto_id")
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  unidadMedidaId Int          @map("unidad_medida_id")
+  unidadMedida   UnidadMedida @relation(fields: [unidadMedidaId], references: [id])
+
+  factorConversion Decimal  @map("factor_conversion") @db.Decimal(10, 4) // Ej: 12 (1 Docena = 12 Unidades)
+  codigoBarras     String?  @map("codigo_barras") // Un código específico para la caja entera
+  precioEspecial   Decimal? @map("precio_especial") @db.Decimal(12, 2) // Si vender por caja tiene un precio distinto al (precio * factor)
+
+  @@unique([productoId, unidadMedidaId])
+  @@map("producto_unidades_alternativas")
+}
+
+model Producto {
+  id        Int     @id @default(autoincrement())
+  empresaId String  @map("empresa_id") @db.Uuid
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+
+  tipo        String  @default("PRODUCTO") // PRODUCTO, SERVICIO, PACK
+  nombre      String
+  descripcion String?
+
+  // Unidad Base (La más pequeña)
+  unidadBaseId         Int?                        @map("unidad_base_id")
+  unidadBase           UnidadMedida?               @relation("ProductoUnidadBase", fields: [unidadBaseId], references: [id])
+  unidadesAlternativas ProductoUnidadAlternativa[]
+
+  precioUnitario Decimal @default(0) @map("precio_unitario") @db.Decimal(12, 2)
+  incluyeIgv     Boolean @default(true) @map("incluye_igv")
+  tipoAfectacion String  @default("10") @map("tipo_afectacion") // 10 = Gravado, 20 = Exonerado
+
+  stock         Decimal @default(0) @db.Decimal(12, 2)
+  codigoInterno String? @map("codigo_interno")
+  codigoSunat   String? @map("codigo_sunat")
+
+  imagenUrl String? @map("imagen_url")
+
+  marcaId Int?   @map("marca_id")
+  marca   Marca? @relation(fields: [marcaId], references: [id])
+
+  categoriaId Int?       @map("categoria_id")
+  categoria   Categoria? @relation(fields: [categoriaId], references: [id])
+
+  movimientosKardex   MovimientoKardex[]
   detallesComprobante ComprobanteDetalle[]
   detallesOrdenCompra OrdenCompraDetalle[]
 
-  createdAt       DateTime   @default(now()) @map("created_at")
-  updatedAt       DateTime   @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("productos")
 }
 
 model Almacen {
-  id              String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  empresaId       String             @map("empresa_id") @db.Uuid
-  empresa         Empresa            @relation(fields: [empresaId], references: [id])
-  nombre          String
-  direccion       String?
-  esPrincipal     Boolean            @default(false) @map("es_principal")
-  estado          String             @default("ACTIVO") // ACTIVO, INACTIVO
-  
-  movimientos     MovimientoKardex[]
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  empresaId   String  @map("empresa_id") @db.Uuid
+  empresa     Empresa @relation(fields: [empresaId], references: [id])
+  nombre      String
+  direccion   String?
+  esPrincipal Boolean @default(false) @map("es_principal")
+  estado      String  @default("ACTIVO") // ACTIVO, INACTIVO
 
-  createdAt       DateTime           @default(now()) @map("created_at")
-  updatedAt       DateTime           @updatedAt @map("updated_at")
+  movimientos MovimientoKardex[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("almacenes")
 }
 
 model MovimientoKardex {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  almacenId       String    @map("almacen_id") @db.Uuid
-  almacen         Almacen   @relation(fields: [almacenId], references: [id])
-  
-  productoId      Int       @map("producto_id")
-  producto        Producto  @relation(fields: [productoId], references: [id])
-  
-  tipoOperacion   String    // INGRESO_COMPRA, SALIDA_VENTA, MERMA, TRASLADO, INGRESO_INICIAL
-  cantidad        Decimal   @db.Decimal(12, 2) // Positivo (Ingresa), Negativo (Sale)
-  costoUnitario   Decimal   @default(0) @map("costo_unitario") @db.Decimal(12, 2) // Costo promedio o costo de compra
-  
-  saldoActual     Decimal   @default(0) @map("saldo_actual") @db.Decimal(12, 2) // Para facilitar la suma histórica si se quiere (Snapshot del momento)
-  
-  origenId        String?   @map("origen_id") // ID del documento que generó el mov (Factura, Guía, etc.)
-  origenTipo      String?   @map("origen_tipo") // "FACTURA", "COMPRA", "AJUSTE"
-  
-  observacion     String?   @db.Text
-  
-  fecha           DateTime  @default(now())
-  creadoPor       String?   @map("creado_por") @db.Uuid
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  almacenId String  @map("almacen_id") @db.Uuid
+  almacen   Almacen @relation(fields: [almacenId], references: [id])
+
+  productoId Int      @map("producto_id")
+  producto   Producto @relation(fields: [productoId], references: [id])
+
+  tipoOperacion String // INGRESO_COMPRA, SALIDA_VENTA, MERMA, TRASLADO, INGRESO_INICIAL
+
+  // Snapshots UoM
+  unidadMedidaUsadaId Int?    @map("unidad_medida_usada_id")
+  factorConversion    Decimal @default(1) @map("factor_conversion") @db.Decimal(10, 4)
+  cantidadIngresada   Decimal @default(1) @map("cantidad_ingresada") @db.Decimal(10, 2) // La cantidad en la unidad que ingresó el usuario (Ej: 2 Cajas)
+
+  cantidad      Decimal @db.Decimal(12, 2) // Cantidad REAL afectada en la unidad base (Ej: 200 Unidades) Positivo/Negativo
+  costoUnitario Decimal @default(0) @map("costo_unitario") @db.Decimal(12, 2) // Costo promedio o costo de compra
+
+  saldoActual Decimal @default(0) @map("saldo_actual") @db.Decimal(12, 2) // Para facilitar la suma histórica si se quiere (Snapshot del momento)
+
+  origenId   String? @map("origen_id") // ID del documento que generó el mov (Factura, Guía, etc.)
+  origenTipo String? @map("origen_tipo") // "FACTURA", "COMPRA", "AJUSTE"
+
+  observacion String? @db.Text
+
+  fecha     DateTime @default(now())
+  creadoPor String?  @map("creado_por") @db.Uuid
 
   @@map("inv_kardex")
 }
 
 model ComprobanteDetalle {
-  id              Int         @id @default(autoincrement())
-  comprobanteId   String      @map("comprobante_id") @db.Uuid
-  comprobante     Comprobante @relation(fields: [comprobanteId], references: [id], onDelete: Cascade)
-  
-  productoId      Int?        @map("producto_id")
-  producto        Producto?   @relation(fields: [productoId], references: [id])
-  
+  id            Int         @id @default(autoincrement())
+  comprobanteId String      @map("comprobante_id") @db.Uuid
+  comprobante   Comprobante @relation(fields: [comprobanteId], references: [id], onDelete: Cascade)
+
+  productoId Int?      @map("producto_id")
+  producto   Producto? @relation(fields: [productoId], references: [id])
+
   // Snapshots inmutables (NUEVO)
-  codigoProducto  String?     @map("codigo_producto")
-  descripcion     String
-  
-  cantidad        Decimal     @db.Decimal(10, 2)
-  precioUnitario  Decimal     @map("precio_unitario") @db.Decimal(12, 2)
-  valorUnitario   Decimal     @map("valor_unitario") @db.Decimal(12, 2)
-  igv             Decimal     @db.Decimal(12, 2)
-  subtotal        Decimal     @db.Decimal(12, 2)
-  total           Decimal     @db.Decimal(12, 2)
+  codigoProducto String? @map("codigo_producto")
+  descripcion    String
+
+  // Snapshot UoM
+  unidadMedidaUsadaId Int?    @map("unidad_medida_usada_id")
+  factorConversion    Decimal @default(1) @map("factor_conversion") @db.Decimal(10, 4)
+
+  cantidad       Decimal @db.Decimal(10, 2) // Cantidad de la unidad seleccionada
+  precioUnitario Decimal @map("precio_unitario") @db.Decimal(12, 2)
+  valorUnitario  Decimal @map("valor_unitario") @db.Decimal(12, 2)
+  igv            Decimal @db.Decimal(12, 2)
+  subtotal       Decimal @db.Decimal(12, 2)
+  total          Decimal @db.Decimal(12, 2)
 
   @@map("comprobante_detalles")
 }
 
 model CajaCuenta {
-  id          Int      @id @default(autoincrement())
-  empresaId   String   @map("empresa_id") @db.Uuid
-  empresa     Empresa  @relation(fields: [empresaId], references: [id])
-  nombre      String   // Ej: "Caja Principal", "BCP Soles", "Yape Empresa"
-  tipo        String   // EFECTIVO, BANCO, BILLETERA_DIGITAL
-  moneda      String   @default("PEN")
-  saldo       Decimal  @default(0) @db.Decimal(12, 2)
-  estado      String   @default("ACTIVO")
-  
-  pagos       Pago[]   // Relación con los pagos que entran aquí
-  turnosCaja  CajaTurno[]
+  id        Int     @id @default(autoincrement())
+  empresaId String  @map("empresa_id") @db.Uuid
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+  nombre    String // Ej: "Caja Principal", "BCP Soles", "Yape Empresa"
+  tipo      String // EFECTIVO, BANCO, BILLETERA_DIGITAL
+  moneda    String  @default("PEN")
+  saldo     Decimal @default(0) @db.Decimal(12, 2)
+  estado    String  @default("ACTIVO")
 
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  pagos      Pago[] // Relación con los pagos que entran aquí
+  turnosCaja CajaTurno[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("cajas_cuentas")
 }
 
 model Pago {
-  id              Int         @id @default(autoincrement())
-  empresaId       String      @map("empresa_id") @db.Uuid // AISLAMIENTO MULTITENANT
-  empresa         Empresa     @relation(fields: [empresaId], references: [id])
-  
-  comprobanteId   String      @map("comprobante_id") @db.Uuid
-  cuentaId        Int         @map("cuenta_id")
-  clienteId       Int         @map("cliente_id")
-  
-  fechaPago       DateTime    @default(now()) @map("fecha_pago")
-  metodoPago      String      @map("metodo_pago") // EFECTIVO, TRANSFERENCIA...
-  referencia      String?
-  monto           Decimal     @db.Decimal(12, 2)
-  montoAplicado   Decimal     @default(0) @db.Decimal(12, 2) @map("monto_aplicado")
-  archivoUrl      String?     @map("archivo_url")
-  estado          String      @default("APROBADO")
-  
-  comprobante     Comprobante @relation(fields: [comprobanteId], references: [id], onDelete: Cascade)
-  cuenta          CajaCuenta  @relation(fields: [cuentaId], references: [id])
-  cliente         Cliente     @relation(fields: [clienteId], references: [id])
-  aplicaciones    PagoAplicacion[]
+  id        Int     @id @default(autoincrement())
+  empresaId String  @map("empresa_id") @db.Uuid // AISLAMIENTO MULTITENANT
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
 
-  createdAt       DateTime    @default(now()) @map("created_at")
-  updatedAt       DateTime    @updatedAt @map("updated_at")
+  comprobanteId String @map("comprobante_id") @db.Uuid
+  cuentaId      Int    @map("cuenta_id")
+  clienteId     Int    @map("cliente_id")
+
+  fechaPago     DateTime @default(now()) @map("fecha_pago")
+  metodoPago    String   @map("metodo_pago") // EFECTIVO, TRANSFERENCIA...
+  referencia    String?
+  monto         Decimal  @db.Decimal(12, 2)
+  montoAplicado Decimal  @default(0) @map("monto_aplicado") @db.Decimal(12, 2)
+  archivoUrl    String?  @map("archivo_url")
+  estado        String   @default("APROBADO")
+
+  comprobante  Comprobante      @relation(fields: [comprobanteId], references: [id], onDelete: Cascade)
+  cuenta       CajaCuenta       @relation(fields: [cuentaId], references: [id])
+  cliente      Cliente          @relation(fields: [clienteId], references: [id])
+  aplicaciones PagoAplicacion[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("pagos")
 }
 
 model ComprobanteRelacion {
-  origenId       String      @db.Uuid @map("origen_id")
-  destinoId      String      @db.Uuid @map("destino_id")
-  tipoRelacion   String      @default("FACTURACION") @map("tipo_relacion")
-  montoAsignado  Decimal     @default(0) @db.Decimal(12, 2) @map("monto_asignado")
-  estado         String      @default("ACTIVO")
-  
-  origen         Comprobante @relation("OrigenRelacion", fields: [origenId], references: [id])
-  destino        Comprobante @relation("DestinoRelacion", fields: [destinoId], references: [id])
+  origenId      String  @map("origen_id") @db.Uuid
+  destinoId     String  @map("destino_id") @db.Uuid
+  tipoRelacion  String  @default("FACTURACION") @map("tipo_relacion")
+  montoAsignado Decimal @default(0) @map("monto_asignado") @db.Decimal(12, 2)
+  estado        String  @default("ACTIVO")
+
+  origen  Comprobante @relation("OrigenRelacion", fields: [origenId], references: [id])
+  destino Comprobante @relation("DestinoRelacion", fields: [destinoId], references: [id])
 
   @@id([origenId, destinoId])
   @@map("comprobantes_relaciones")
 }
 
 model ComprobanteCuota {
-  id              Int         @id @default(autoincrement())
-  comprobanteId   String      @map("comprobante_id") @db.Uuid
-  numero          Int         
-  monto           Decimal     @db.Decimal(12, 2)
-  montoPagado     Decimal     @default(0) @db.Decimal(12, 2) @map("monto_pagado")
-  fechaVencimiento DateTime   @map("fecha_vencimiento")
-  estado          String      @default("PENDIENTE")
-  
-  aplicaciones    PagoAplicacion[]
-  comprobante     Comprobante @relation(fields: [comprobanteId], references: [id], onDelete: Cascade)
+  id               Int      @id @default(autoincrement())
+  comprobanteId    String   @map("comprobante_id") @db.Uuid
+  numero           Int
+  monto            Decimal  @db.Decimal(12, 2)
+  montoPagado      Decimal  @default(0) @map("monto_pagado") @db.Decimal(12, 2)
+  fechaVencimiento DateTime @map("fecha_vencimiento")
+  estado           String   @default("PENDIENTE")
+
+  aplicaciones PagoAplicacion[]
+  comprobante  Comprobante      @relation(fields: [comprobanteId], references: [id], onDelete: Cascade)
 
   @@map("comprobantes_cuotas")
 }
 
 model PagoAplicacion {
-  id              Int         @id @default(autoincrement())
-  pagoId          Int         @map("pago_id")
-  cuotaId         Int?        @map("cuota_id") 
-  monto           Decimal     @db.Decimal(12, 2) 
-  fechaAplicacion DateTime    @default(now()) @map("fecha_aplicacion")
+  id              Int      @id @default(autoincrement())
+  pagoId          Int      @map("pago_id")
+  cuotaId         Int?     @map("cuota_id")
+  monto           Decimal  @db.Decimal(12, 2)
+  fechaAplicacion DateTime @default(now()) @map("fecha_aplicacion")
 
-  pago            Pago        @relation(fields: [pagoId], references: [id], onDelete: Cascade)
-  cuota           ComprobanteCuota? @relation(fields: [cuotaId], references: [id])
+  pago  Pago              @relation(fields: [pagoId], references: [id], onDelete: Cascade)
+  cuota ComprobanteCuota? @relation(fields: [cuotaId], references: [id])
 
   @@map("pagos_aplicaciones")
 }
 
 model ClienteSaldo {
-  id              Int         @id @default(autoincrement())
-  empresaId       String      @map("empresa_id") @db.Uuid // AISLAMIENTO MULTITENANT
-  clienteId       Int         @map("cliente_id") @unique
-  saldoAFavor     Decimal     @default(0) @db.Decimal(12, 2) @map("saldo_a_favor")
-  
-  cliente         Cliente     @relation(fields: [clienteId], references: [id])
+  id          Int     @id @default(autoincrement())
+  empresaId   String  @map("empresa_id") @db.Uuid // AISLAMIENTO MULTITENANT
+  clienteId   Int     @unique @map("cliente_id")
+  saldoAFavor Decimal @default(0) @map("saldo_a_favor") @db.Decimal(12, 2)
+
+  cliente Cliente @relation(fields: [clienteId], references: [id])
+
   @@map("clientes_saldos")
 }
 
 model CajaTurno {
-  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  empresaId       String      @map("empresa_id") @db.Uuid
-  empresa         Empresa     @relation(fields: [empresaId], references: [id])
-  
-  usuarioId       String      @map("usuario_id")
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  empresaId String  @map("empresa_id") @db.Uuid
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+
+  usuarioId String @map("usuario_id")
   // usuario         UsuarioErp  @relation(fields: [usuarioId], references: [id]) // Asumiendo que el cajero es UsuarioErp
-  
-  cajaCuentaId    Int         @map("caja_cuenta_id")
-  cajaCuenta      CajaCuenta  @relation(fields: [cajaCuentaId], references: [id])
-  
-  fechaApertura   DateTime    @default(now()) @map("fecha_apertura")
-  fechaCierre     DateTime?   @map("fecha_cierre")
-  
-  montoInicial    Decimal     @default(0) @db.Decimal(12, 2) @map("monto_inicial")
-  montoEfectivo   Decimal     @default(0) @db.Decimal(12, 2) @map("monto_efectivo")
-  montoArqueado   Decimal     @default(0) @db.Decimal(12, 2) @map("monto_arqueado")
-  diferencia      Decimal     @default(0) @db.Decimal(12, 2) // Si falta plata es negativo, si sobra positivo
-  
-  estado          String      @default("ABIERTO") // ABIERTO, CERRADO
-  observaciones   String?     @db.Text
-  
-  movimientos     CajaMovimiento[]
-  
+
+  cajaCuentaId Int        @map("caja_cuenta_id")
+  cajaCuenta   CajaCuenta @relation(fields: [cajaCuentaId], references: [id])
+
+  fechaApertura DateTime  @default(now()) @map("fecha_apertura")
+  fechaCierre   DateTime? @map("fecha_cierre")
+
+  montoInicial  Decimal @default(0) @map("monto_inicial") @db.Decimal(12, 2)
+  montoEfectivo Decimal @default(0) @map("monto_efectivo") @db.Decimal(12, 2)
+  montoArqueado Decimal @default(0) @map("monto_arqueado") @db.Decimal(12, 2)
+  diferencia    Decimal @default(0) @db.Decimal(12, 2) // Si falta plata es negativo, si sobra positivo
+
+  estado        String  @default("ABIERTO") // ABIERTO, CERRADO
+  observaciones String? @db.Text
+
+  movimientos CajaMovimiento[]
+
   @@map("cajas_turnos")
 }
 
 model CajaMovimiento {
-  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  turnoId         String      @map("turno_id") @db.Uuid
-  turno           CajaTurno   @relation(fields: [turnoId], references: [id])
-  
-  tipo            String      // INGRESO, EGRESO
-  monto           Decimal     @db.Decimal(12, 2)
-  descripcion     String
-  fecha           DateTime    @default(now())
-  
+  id      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  turnoId String    @map("turno_id") @db.Uuid
+  turno   CajaTurno @relation(fields: [turnoId], references: [id])
+
+  tipo        String // INGRESO, EGRESO
+  monto       Decimal  @db.Decimal(12, 2)
+  descripcion String
+  fecha       DateTime @default(now())
+
   // Opcionalmente podemos vincularlo al comprobante o pago que originó el ingreso
   // pagoId       Int?
-  
+
   @@map("cajas_movimientos")
+}
+
+// --- PLANES SAAS Y LÍMITES ---
+
+model Plan {
+  id            String  @id @default(uuid())
+  nombre        String  @unique // EMPRENDE, NEGOCIO, CONTROL, PREMIUM
+  precioMensual Decimal @map("precio_mensual") @db.Decimal(10, 2)
+  precioAnual   Decimal @map("precio_anual") @db.Decimal(10, 2)
+
+  limiteFacturas   Int @map("limite_facturas")
+  limiteUsuarios   Int @map("limite_usuarios")
+  limiteSucursales Int @map("limite_sucursales")
+  limiteProductos  Int @map("limite_productos")
+
+  activo          Boolean @default(true)
+  esPersonalizado Boolean @default(false) @map("es_personalizado")
+
+  creadoPor String?  @map("creado_por")
+  createdAt DateTime @default(now()) @map("creado_at")
+
+  empresas Empresa[]
+  limites  EmpresaLimite[]
+
+  @@map("planes")
+}
+
+model EmpresaLimite {
+  id        String  @id @default(uuid())
+  empresaId String  @unique @map("empresa_id") @db.Uuid
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  planId String @map("plan_id")
+  plan   Plan   @relation(fields: [planId], references: [id])
+
+  facturasBase   Int @map("facturas_base")
+  facturasExtra  Int @default(0) @map("facturas_extra")
+  facturasUsadas Int @default(0) @map("facturas_usadas")
+
+  usuariosBase   Int @map("usuarios_base")
+  usuariosExtra  Int @default(0) @map("usuarios_extra")
+  usuariosUsados Int @default(0) @map("usuarios_usados")
+
+  sucursalesBase   Int @map("sucursales_base")
+  sucursalesExtra  Int @default(0) @map("sucursales_extra")
+  sucursalesUsadas Int @default(0) @map("sucursales_usadas")
+
+  productosBase   Int @map("productos_base")
+  productosExtra  Int @default(0) @map("productos_extra")
+  productosUsados Int @default(0) @map("productos_usados")
+
+  cicloInicio DateTime @map("ciclo_inicio")
+  cicloFin    DateTime @map("ciclo_fin")
+
+  scheduledPlanId   String?   @map("scheduled_plan_id")
+  scheduledPlanDate DateTime? @map("scheduled_plan_date")
+
+  @@map("empresa_limites")
+}
+
+model AddOn {
+  id       String  @id @default(uuid())
+  nombre   String
+  tipo     String // FACTURAS, USUARIOS, SUCURSALES, PRODUCTOS
+  cantidad Int
+  precio   Decimal @db.Decimal(10, 2)
+  activo   Boolean @default(true)
+
+  compras EmpresaAddOn[]
+
+  @@map("add_ons")
+}
+
+model EmpresaAddOn {
+  id        String  @id @default(uuid())
+  empresaId String  @map("empresa_id") @db.Uuid
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  addonId String @map("addon_id")
+  addon   AddOn  @relation(fields: [addonId], references: [id])
+
+  cantidadComprada Int      @map("cantidad_comprada")
+  aplicadoEn       DateTime @default(now()) @map("aplicado_en")
+  cicloAplica      String   @default("ACTUAL") @map("ciclo_aplica") // ACTUAL, SIGUIENTE
+
+  @@map("empresa_addons")
+}
+
+model ConfiguracionSistema {
+  id                  String  @id @default("GLOBAL")
+  certificadoUrl      String? @map("certificado_url")
+  certificadoPassword String? @map("certificado_password")
+  certificadoBase64   String? @map("certificado_base64")
+  sunatUsuario        String? @map("sunat_usuario")
+  sunatClave          String? @map("sunat_clave")
+
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("configuracion_sistema")
 }

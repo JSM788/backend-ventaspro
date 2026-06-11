@@ -8,6 +8,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Req,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -17,19 +18,44 @@ import { EmpresasService } from './empresas.service';
 export class EmpresasController {
   constructor(private readonly empresasService: EmpresasService) {}
 
+  @Get()
+  getAllEmpresas() {
+    return this.empresasService.getAllEmpresas();
+  }
+
+  @Get('planes')
+  getPlanes() {
+    return this.empresasService.getPlanes();
+  }
+
+  @Get('tipos-negocio')
+  getTiposNegocio() {
+    return this.empresasService.getTiposNegocio();
+  }
+
+  @Post()
+  createEmpresa(@Body() data: any) {
+    return this.empresasService.createEmpresaCompleta(data);
+  }
+
+  @Put(':id')
+  updateEmpresa(@Param('id') id: string, @Body() data: any) {
+    return this.empresasService.updateEmpresa(id, data);
+  }
+
   @Get('config')
-  getConfig() {
-    return this.empresasService.getConfig();
+  getConfig(@Req() req: any) {
+    return this.empresasService.getConfig(req.user?.empresaId);
   }
 
   @Post('config')
-  createConfig(@Body() data: any) {
-    return this.empresasService.createConfig(data);
+  createConfig(@Body() data: any, @Req() req: any) {
+    return this.empresasService.createConfig(data, req.user?.empresaId);
   }
 
   @Put('config')
-  updateConfig(@Body() data: any) {
-    return this.empresasService.updateConfig(data);
+  updateConfig(@Body() data: any, @Req() req: any) {
+    return this.empresasService.updateConfig(data, req.user?.empresaId);
   }
 
   /**
@@ -55,25 +81,13 @@ export class EmpresasController {
   uploadLogo(
     @Param('tipo') tipo: string,
     @UploadedFile() file: Express.Multer.File,
+    @Req() req: any,
   ) {
     if (!file) throw new BadRequestException('No se recibió ningún archivo');
     if (tipo !== 'claro' && tipo !== 'oscuro') {
       throw new BadRequestException('El parámetro tipo debe ser "claro" u "oscuro"');
     }
-    return this.empresasService.uploadLogo(tipo, file);
+    return this.empresasService.uploadLogo(tipo, file, req.user?.empresaId);
   }
 
-  @Post('config/certificado')
-  @UseInterceptors(
-    FileInterceptor('certificado', {
-      storage: memoryStorage(),
-      limits: { fileSize: 10 * 1024 * 1024 },
-    }),
-  )
-  uploadCertificado(
-    @UploadedFile() file: Express.Multer.File,
-    @Body() body: any,
-  ) {
-    return this.empresasService.updateCertificado(file, body);
-  }
 }

@@ -17,6 +17,7 @@ export class TenantGuard extends AuthGuard('jwt') {
     if (isPublic) {
       return true;
     }
+
     // LLama a la estrategia jwt primero para validar el token
     return super.canActivate(context);
   }
@@ -27,9 +28,9 @@ export class TenantGuard extends AuthGuard('jwt') {
       throw err || new UnauthorizedException('Token inválido o no proporcionado');
     }
 
-    // Aquí aseguramos que el token tiene el tenant (empresaId)
-    if (!user.empresaId) {
-      throw new UnauthorizedException('El token no contiene el identificador de la compañía (Tenant ID)');
+    // Aquí aseguramos que el token tiene el tenant (empresaId) o es superadmin
+    if (!user.empresaId && !user.isSuperAdmin) {
+      throw new UnauthorizedException('El token no contiene el identificador de la compañía y no eres Super Admin');
     }
 
     // Retorna el usuario para inyectarlo en req.user

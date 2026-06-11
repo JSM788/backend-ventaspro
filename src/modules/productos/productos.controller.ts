@@ -15,6 +15,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { ProductosService } from './productos.service';
 import { StorageService } from '../../core/storage/storage.interface';
+import { CreateProductoDto, UpdateProductoDto } from './dto/producto.dto';
 
 @Controller('v1/productos')
 export class ProductosController {
@@ -36,7 +37,7 @@ export class ProductosController {
   @Post()
   @UseInterceptors(FileInterceptor('imagen', { storage: memoryStorage() }))
   async create(
-    @Body() data: any,
+    @Body() data: CreateProductoDto,
     @UploadedFile() file?: Express.Multer.File
   ) {
     // Si viene la data como formData (multipart/form-data), vendrá en texto plano
@@ -71,7 +72,7 @@ export class ProductosController {
   }
 
   @Put(':id')
-  update(@Param('id', ParseIntPipe) id: number, @Body() data: any) {
+  update(@Param('id', ParseIntPipe) id: number, @Body() data: UpdateProductoDto) {
     return this.productosService.update(id, data);
   }
 

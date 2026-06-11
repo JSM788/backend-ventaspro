@@ -15,12 +15,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    // Aquí el payload ya pasó la validación de firma
-    // Mapeamos el 'companyId' que inyecta nexus-auth a nuestro 'empresaId'
     return { 
       userId: payload.sub, 
       email: payload.email, 
-      empresaId: payload.companyId || payload.empresaId 
+      empresaId: payload.companyId || payload.empresaId,
+      isSuperAdmin: payload.isSuperAdmin || false
     };
   }
 }

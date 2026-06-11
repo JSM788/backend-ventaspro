@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DatabaseModule } from './core/database/database.module';
@@ -23,8 +23,17 @@ import { APP_GUARD } from '@nestjs/core';
 import { TenantGuard } from './core/auth/tenant.guard';
 import { CajasTurnosModule } from './modules/cajas-turnos/cajas-turnos.module';
 
+import { LogsModule } from './modules/logs/logs.module';
+import { PseModule } from './pse/pse.module';
+
+import { CorrelationIdMiddleware } from './core/logger/correlation.middleware';
+import { TenantMiddleware } from './core/auth/tenant.middleware';
+
+import { ConfiguracionSistemaModule } from './modules/configuracion-sistema/configuracion-sistema.module';
+import { MailModule } from './core/mail/mail.module';
+
 @Module({
-  imports: [DatabaseModule, ClientesModule, ComprobantesModule, NotasVentaModule, CotizacionesModule, PedidosModule, EmpresasModule, StorageModule, SeriesModule, ProductosModule, FinanzasModule, InventarioModule, ComprasModule, AuthModule, CategoriasModule, MarcasModule, CajasTurnosModule],
+  imports: [DatabaseModule, ClientesModule, ComprobantesModule, NotasVentaModule, CotizacionesModule, PedidosModule, EmpresasModule, StorageModule, SeriesModule, ProductosModule, FinanzasModule, InventarioModule, ComprasModule, AuthModule, CategoriasModule, MarcasModule, CajasTurnosModule, LogsModule, PseModule, ConfiguracionSistemaModule, MailModule],
   controllers: [AppController],
   providers: [
     AppService,
@@ -34,4 +43,9 @@ import { CajasTurnosModule } from './modules/cajas-turnos/cajas-turnos.module';
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+    consumer.apply(TenantMiddleware).forRoutes('*');
+  }
+}

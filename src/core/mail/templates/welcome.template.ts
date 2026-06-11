@@ -1,0 +1,435 @@
+export const buildWelcomeEmailTemplate = (
+  empresaName: string,
+  email: string,
+  passwordAleatoria: string,
+  logoUrl?: string
+) => {
+  const anio = new Date().getFullYear();
+  const logoSrc = logoUrl || 'https://i.imgur.com/vHq0Ldb.png'; // Reemplazar con el logo blanco real de VentasPro si se tiene
+
+  return `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>¡Bienvenido a VentasPro!</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #f3f4f6;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: #374151;
+      -webkit-font-smoothing: antialiased;
+    }
+    table {
+      border-spacing: 0;
+      border-collapse: collapse;
+    }
+    td {
+      padding: 0;
+    }
+    .wrapper {
+      width: 100%;
+      background-color: #f3f4f6;
+      padding: 40px 0;
+    }
+    .main {
+      background-color: #ffffff;
+      margin: 0 auto;
+      width: 100%;
+      max-width: 640px;
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    }
+    /* HEADER */
+    .header {
+      background: linear-gradient(135deg, #2563eb 0%, #4338ca 100%);
+      padding: 48px 40px;
+      text-align: center;
+      color: #ffffff;
+    }
+    .header img {
+      height: 40px;
+      margin-bottom: 24px;
+    }
+    .header h1 {
+      margin: 0 0 12px 0;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+    .header p {
+      margin: 0;
+      font-size: 15px;
+      color: #e0e7ff;
+      font-weight: 500;
+    }
+    
+    /* BODY CONTENT */
+    .content {
+      padding: 48px 40px;
+    }
+    .greeting {
+      font-size: 22px;
+      font-weight: 500;
+      color: #111827;
+      margin-top: 0;
+      margin-bottom: 16px;
+    }
+    .greeting strong {
+      color: #4338ca;
+      font-weight: 800;
+    }
+    .intro-text {
+      font-size: 15px;
+      line-height: 1.6;
+      color: #4b5563;
+      margin-top: 0;
+      margin-bottom: 32px;
+    }
+
+    /* CREDENTIALS BOX */
+    .credentials-container {
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
+      background-color: #ffffff;
+      margin-bottom: 24px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    }
+    .credential-row {
+      padding: 24px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .credential-row:last-child {
+      border-bottom: none;
+    }
+    .icon-box {
+      width: 48px;
+      height: 48px;
+      background-color: #eff6ff;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 48px;
+      display: inline-block;
+      vertical-align: middle;
+      color: #3b82f6;
+      font-size: 20px;
+    }
+    .cred-info {
+      display: inline-block;
+      vertical-align: middle;
+      margin-left: 16px;
+      width: calc(100% - 160px);
+    }
+    .cred-label {
+      font-size: 11px;
+      font-weight: 800;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 0 0 4px 0;
+    }
+    .cred-value {
+      font-size: 16px;
+      font-weight: 700;
+      color: #111827;
+      margin: 0;
+    }
+    .copy-btn {
+      display: inline-block;
+      vertical-align: middle;
+      float: right;
+      margin-top: 8px;
+      padding: 6px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #3b82f6;
+      text-decoration: none;
+      background-color: #ffffff;
+    }
+
+    /* URL BOX */
+    .url-box {
+      background-color: #f5f3ff;
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 32px;
+    }
+    .url-icon {
+      background-color: #ede9fe;
+      color: #6d28d9;
+    }
+
+    /* CTA BUTTON */
+    .cta-container {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    .cta-btn {
+      background-color: #4338ca;
+      color: #ffffff !important;
+      text-decoration: none;
+      padding: 16px 32px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 15px;
+      display: inline-block;
+      box-shadow: 0 4px 14px rgba(67, 56, 202, 0.4);
+    }
+
+    /* PRÓXIMOS PASOS */
+    .steps-section {
+      margin-bottom: 48px;
+    }
+    .steps-title {
+      font-size: 12px;
+      font-weight: 800;
+      color: #4338ca;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 0 0 24px 0;
+      display: flex;
+      align-items: center;
+    }
+    .steps-grid {
+      width: 100%;
+      table-layout: fixed;
+    }
+    .step-item {
+      text-align: center;
+      vertical-align: top;
+      padding: 0 8px;
+    }
+    .step-icon-wrapper {
+      width: 56px;
+      height: 56px;
+      background-color: #eff6ff;
+      border-radius: 16px;
+      margin: 0 auto 12px auto;
+      position: relative;
+      line-height: 56px;
+      color: #3b82f6;
+    }
+    .step-icon-wrapper img {
+      width: 24px;
+      vertical-align: middle;
+    }
+    .check-badge {
+      position: absolute;
+      bottom: -4px;
+      right: -4px;
+      width: 20px;
+      height: 20px;
+      background-color: #10b981;
+      border-radius: 50%;
+      border: 2px solid #ffffff;
+      color: #ffffff;
+      line-height: 18px;
+      font-size: 12px;
+    }
+    .step-text {
+      font-size: 11px;
+      color: #4b5563;
+      line-height: 1.4;
+      margin: 0;
+      font-weight: 500;
+    }
+
+    /* HELP SECTION */
+    .help-section {
+      background-color: #f9fafb;
+      border-radius: 16px;
+      padding: 24px;
+    }
+    .help-table {
+      width: 100%;
+    }
+    .help-left {
+      width: 60%;
+      vertical-align: middle;
+    }
+    .help-right {
+      width: 40%;
+      vertical-align: middle;
+      border-left: 1px solid #e5e7eb;
+      padding-left: 24px;
+    }
+    .help-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #111827;
+      margin: 0 0 4px 0;
+    }
+    .help-desc {
+      font-size: 12px;
+      color: #6b7280;
+      margin: 0;
+    }
+    .help-link {
+      font-size: 12px;
+      color: #4338ca;
+      text-decoration: none;
+      font-weight: 500;
+      display: block;
+      margin-bottom: 8px;
+    }
+    .help-link:last-child {
+      margin-bottom: 0;
+    }
+
+    /* FOOTER */
+    .footer {
+      text-align: center;
+      padding: 0 40px 40px 40px;
+      font-size: 12px;
+      color: #9ca3af;
+      line-height: 1.6;
+    }
+    .footer p {
+      margin: 0 0 8px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <table class="main" align="center">
+      <!-- HEADER -->
+      <tr>
+        <td class="header">
+          <h1 style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+            <span style="color: #60a5fa;">V</span> VentasPro
+          </h1>
+          <h1>¡Bienvenido a VentasPro! 🎉</h1>
+          <p>Tu plataforma de gestión y facturación electrónica</p>
+        </td>
+      </tr>
+
+      <!-- CONTENT -->
+      <tr>
+        <td class="content">
+          <p class="greeting">Hola, <strong>Equipo ${empresaName}</strong> 👋</p>
+          <p class="intro-text">
+            Nos alegra tenerlos con nosotros. Tu cuenta ha sido creada y tu entorno ya está listo para que comiences a operar.<br><br>
+            Utiliza las siguientes credenciales para acceder por primera vez:
+          </p>
+
+          <!-- CREDENTIALS BOX -->
+          <div class="credentials-container">
+            <div class="credential-row">
+              <div class="icon-box">✉️</div>
+              <div class="cred-info">
+                <p class="cred-label">USUARIO (CORREO ELECTRÓNICO)</p>
+                <p class="cred-value">${email}</p>
+              </div>
+            </div>
+            <div class="credential-row">
+              <div class="icon-box" style="color: #6366f1;">🔑</div>
+              <div class="cred-info">
+                <p class="cred-label">CONTRASEÑA TEMPORAL</p>
+                <p class="cred-value">${passwordAleatoria}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- URL BOX -->
+          <div class="url-box">
+            <div class="icon-box url-icon">🌐</div>
+            <div class="cred-info">
+              <p class="cred-label">URL DE ACCESO</p>
+              <a href="http://localhost:3000/login" style="font-size: 15px; font-weight: 700; color: #4338ca; text-decoration: none; margin: 0 0 4px 0; display: block;">
+                https://app.ventaspro.com
+              </a>
+              <p style="font-size: 12px; color: #6b7280; margin: 0;">Guarda este enlace para acceder siempre a tu sistema.</p>
+            </div>
+          </div>
+
+          <!-- CTA BUTTON -->
+          <div class="cta-container">
+            <a href="http://localhost:3000/login" class="cta-btn">
+              ➔ INGRESAR A VENTASPRO
+            </a>
+          </div>
+
+          <!-- PRÓXIMOS PASOS -->
+          <div class="steps-section">
+            <p class="steps-title">📋 PRÓXIMOS PASOS RECOMENDADOS</p>
+            <table class="steps-grid">
+              <tr>
+                <td class="step-item">
+                  <div class="step-icon-wrapper">
+                    🔓
+                    <div class="check-badge">✓</div>
+                  </div>
+                  <p class="step-text">1. Inicia<br>sesión</p>
+                </td>
+                <td class="step-item">
+                  <div class="step-icon-wrapper">
+                    🛡️
+                    <div class="check-badge">✓</div>
+                  </div>
+                  <p class="step-text">2. Cambia tu<br>contraseña</p>
+                </td>
+                <td class="step-item">
+                  <div class="step-icon-wrapper">
+                    🏢
+                    <div class="check-badge">✓</div>
+                  </div>
+                  <p class="step-text">3. Completa la info<br>de tu empresa</p>
+                </td>
+                <td class="step-item">
+                  <div class="step-icon-wrapper">
+                    📄
+                    <div class="check-badge">✓</div>
+                  </div>
+                  <p class="step-text">4. Empieza a emitir<br>documentos</p>
+                </td>
+              </tr>
+            </table>
+          </div>
+
+          <!-- HELP SECTION -->
+          <div class="help-section">
+            <table class="help-table">
+              <tr>
+                <td class="help-left">
+                  <table style="width: 100%;">
+                    <tr>
+                      <td style="width: 48px;">
+                        <div class="icon-box" style="background-color: #e0e7ff; color: #4338ca;">🎧</div>
+                      </td>
+                      <td style="padding-left: 12px;">
+                        <p class="help-title">¿Necesitas ayuda?</p>
+                        <p class="help-desc">Nuestro equipo de soporte está para ayudarte.</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+                <td class="help-right">
+                  <a href="mailto:soporte@ventaspro.com" class="help-link">✉️ soporte@ventaspro.com</a>
+                  <a href="#" class="help-link">💬 Chat en línea desde tu panel</a>
+                </td>
+              </tr>
+            </table>
+          </div>
+
+        </td>
+      </tr>
+
+      <!-- FOOTER -->
+      <tr>
+        <td class="footer">
+          <p>© ${anio} VentasPro ERP SaaS. Todos los derechos reservados.</p>
+          <p>Si no solicitaste la creación de esta cuenta, por favor ignora este correo.</p>
+        </td>
+      </tr>
+    </table>
+  </div>
+</body>
+</html>
+  `;
+};

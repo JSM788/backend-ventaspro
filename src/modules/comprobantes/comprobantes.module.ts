@@ -3,9 +3,10 @@ import { ComprobantesService } from './comprobantes.service';
 import { ComprobantesController } from './comprobantes.controller';
 
 import { InventarioModule } from '../inventario/inventario.module';
+import { PseModule } from '../../pse/pse.module';
 
 @Module({
-  imports: [InventarioModule],
+  imports: [InventarioModule, PseModule],
   controllers: [ComprobantesController],
   providers: [ComprobantesService],
 })

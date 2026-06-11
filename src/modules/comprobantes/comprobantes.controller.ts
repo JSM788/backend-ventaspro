@@ -11,9 +11,15 @@ import { SunatSoapClient } from '../../pse/core/sunat/soap/SunatSoapClient';
 
 import { CurrentTenant } from '../../core/auth/current-tenant.decorator';
 
+import { PseService } from '../../pse/core/providers/pse.service';
+import { Public } from '../../core/auth/public.decorator';
+
 @Controller('comprobantes')
 export class ComprobantesController {
-  constructor(private readonly comprobantesService: ComprobantesService) {}
+  constructor(
+    private readonly comprobantesService: ComprobantesService,
+    private readonly pseService: PseService
+  ) {}
 
   @Get()
   findAll(
@@ -64,86 +70,27 @@ export class ComprobantesController {
 
   @Post(':id/retry')
   async retry(@Param('id') id: string) {
-    const comprobante = await db.comprobante.findUnique({
-      where: { id },
-      include: { empresa: true, cliente: true, detalles: true }
-    });
-    if (!comprobante) throw new HttpException('No encontrado', HttpStatus.NOT_FOUND);
+    const result = await this.pseService.emitir(id);
 
-    const tieneCertificado = !!comprobante.empresa?.certificadoBase64;
-    const diagnostico: any = {
-      id: comprobante.id,
-      tipo: comprobante.tipo,
-      serie: comprobante.serie,
-      correlativo: comprobante.correlativo,
-      tieneCertificado,
-      estadoActual: comprobante.estadoSunat,
-      empresa: {
-        id: comprobante.empresa?.id,
-        razonSocial: comprobante.empresa?.razonSocial,
-        sunatUsuario: comprobante.empresa?.sunatUsuario ?? '(null)',
-        sunatClaveSet: !!comprobante.empresa?.sunatClave,
-        certificadoBase64Bytes: comprobante.empresa?.certificadoBase64?.length ?? 0,
-      },
-      xmlPreview: null,
-      nubefactResult: null,
-      error: null
-    };
-
-    try {
-      const xml = InvoiceBuilder.build(comprobante);
-      diagnostico.xmlPreview = xml.substring(0, 300) + '...';
-    } catch (e: any) {
-      diagnostico.error = 'Error construyendo XML: ' + e.message;
-      return diagnostico;
-    }
-
-    // Si NO tiene certificado → ir a Nubefact
-    if (!tieneCertificado) {
-      // MODO MVP: Dormido
-      diagnostico.nubefactResult = { status: 'DORMIDO_MVP', message: 'Simulando aceptación local' };
-      diagnostico.estadoActual = 'ACEPTADO';
-      await db.comprobante.update({
-        where: { id: comprobante.id },
-        data: { estadoSunat: 'ACEPTADO', sunatResponseMsg: 'Simulado Aceptado por botón reintentar (MVP)' }
-      });
+    if (result.success) {
+      return {
+        success: true,
+        message: result.message,
+        xmlUrl: result.xmlUrl,
+        cdrUrl: result.cdrUrl,
+        viaEmision: result.viaEmision,
+      };
     } else {
-      // Tiene certificado: intentar firma + SUNAT
-      const tieneCredencialesSunat = !!comprobante.empresa?.sunatUsuario && !!comprobante.empresa?.sunatClave;
-      diagnostico.tieneCredencialesSunat = tieneCredencialesSunat;
-
-      // Probar firma del XML
-      try {
-        const forge = require('node-forge');
-        const p12Der = forge.util.decode64(comprobante.empresa!.certificadoBase64);
-        const p12Asn1 = forge.asn1.fromDer(p12Der);
-        const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, comprobante.empresa!.certificadoPassword || '');
-        let privateKeyPem = '', certPem = '';
-        for (const safeContent of p12.safeContents) {
-          for (const safeBag of safeContent.safeBags) {
-            if (safeBag.type === forge.pki.oids.pkcs8ShroudedKeyBag && safeBag.key)
-              privateKeyPem = forge.pki.privateKeyToPem(safeBag.key);
-            else if (safeBag.type === forge.pki.oids.certBag && safeBag.cert)
-              certPem = forge.pki.certificateToPem(safeBag.cert);
-          }
-        }
-        const certBase64 = certPem.replace('-----BEGIN CERTIFICATE-----', '').replace('-----END CERTIFICATE-----', '').replace(/\n/g, '').trim();
-        const xml = InvoiceBuilder.build(comprobante);
-        const { signedXml } = XmlSigner.sign(xml, privateKeyPem, certBase64);
-        diagnostico.firmaOk = true;
-
-        // Probar SUNAT SOAP con timeout corto
-        const soapResult = await SunatSoapClient.sendBill(comprobante.empresa!, comprobante, signedXml);
-        diagnostico.sunatOk = true;
-        diagnostico.sunatResult = { xmlPath: soapResult.xmlFileName, cdrPath: soapResult.zipFileName };
-      } catch (e: any) {
-        diagnostico.error = 'Error en flujo nativo: ' + e.message;
-      }
+      // Si el proveedor lanza error, lanzamos un BusinessException (que creamos en Fase 2)
+      // O simplemente retornamos el error controlado
+      throw new HttpException(
+        { errorCode: result.errorCode || 'ERR_PSE', message: result.message },
+        HttpStatus.BAD_REQUEST
+      );
     }
-
-    return diagnostico;
   }
 
+  @Public()
   @Get(':id/pdf')
   async downloadPdfById(@Param('id') id: string, @Res() res: Response) {
     const comprobante = await db.comprobante.findUnique({
@@ -173,6 +120,7 @@ export class ComprobantesController {
     }
   }
 
+  @Public()
   @Get('download/:type/:filename')
   downloadFile(
     @Param('type') type: string,

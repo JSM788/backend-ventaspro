@@ -11,19 +11,23 @@ export class AuthController {
   ) {}
 
   @Public()
-  @Post('dev-login')
-  async devLogin(@Body() body: any) {
-    // ENTORNO DEV SOLAMENTE: Genera un token válido saltándose nexus-auth
-    const empresa = await this.prisma.empresa.findFirst();
-    
-    if (!empresa) {
-      throw new UnauthorizedException('No hay empresas en la BD. Ejecuta el seed primero.');
+  @Post('login')
+  async login(@Body() body: any) {
+    const { email, password } = body;
+
+    const user = await this.prisma.usuarioErp.findFirst({
+      where: { email }
+    });
+
+    if (!user || user.password !== password) {
+      throw new UnauthorizedException('Credenciales inválidas');
     }
 
     const payload = {
-      sub: 'dev-user-id',
-      email: 'dev@ventaspro.com',
-      companyId: empresa.id,
+      sub: user.id,
+      email: user.email,
+      empresaId: user.empresaId,
+      isSuperAdmin: user.isSuperAdmin,
     };
 
     const access_token = this.jwtService.sign(payload);
@@ -33,8 +37,8 @@ export class AuthController {
       user: {
         id: payload.sub,
         email: payload.email,
-        empresaId: empresa.id,
-        nombre: 'Usuario Dev',
+        empresaId: user.empresaId,
+        isSuperAdmin: user.isSuperAdmin,
       }
     };
   }

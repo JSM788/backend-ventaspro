@@ -88,7 +88,7 @@ export class ClientesService {
         let tipoCliente = await this.prisma.tipoCliente.findFirst({ where: { empresaId } });
         if (!tipoCliente) {
           tipoCliente = await this.prisma.tipoCliente.create({
-            data: { nombre: 'General', descripcion: 'Tipo de cliente por defecto', empresaId }
+            data: { nombre: `General - ${empresaId.substring(0,8)}`, descripcion: 'Tipo de cliente por defecto', empresaId }
           });
         }
 

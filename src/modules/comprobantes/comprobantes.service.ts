@@ -130,10 +130,11 @@ export class ComprobantesService {
       throw new BadRequestException('Empresa no encontrada');
     }
 
-    // Bloquear si no hay certificado (y no es nota de venta)
+    // Bloquear si no hay certificado global (y no es nota de venta)
     if (data.tipo !== TIPOS_COMPROBANTE.NOTA_VENTA && data.tipo !== 'NV') {
-      if (!empresa.certificadoBase64) {
-        throw new BadRequestException('No cuentas con un certificado digital configurado. Sube tu archivo .p12 en la Configuración de Empresa para emitir facturas y boletas.');
+      const config = await this.prisma.configuracionSistema.findUnique({ where: { id: "GLOBAL" } });
+      if (!config?.certificadoBase64) {
+        throw new BadRequestException('El sistema no cuenta con un certificado digital maestro configurado. Contacte al administrador.');
       }
     }
 
@@ -144,7 +145,7 @@ export class ComprobantesService {
       let tipoCliente = await this.prisma.tipoCliente.findFirst({ where: { empresaId: empresa.id } });
       if (!tipoCliente) {
         tipoCliente = await this.prisma.tipoCliente.create({
-          data: { nombre: 'General', descripcion: 'Tipo de cliente por defecto', empresaId: empresa.id }
+          data: { nombre: `General - ${empresa.id.substring(0,8)}`, descripcion: 'Tipo de cliente por defecto', empresaId: empresa.id }
         });
       }
 
@@ -280,9 +281,9 @@ export class ComprobantesService {
   }
 
   async consolidar(data: { empresaId: string, notasVentaIds: string[], clienteId: number, tipoComprobante: string, serie: string }) {
-    let empresa = await this.prisma.empresa.findUnique({ where: { id: data.empresaId } });
-    if (!empresa?.certificadoBase64 && data.tipoComprobante !== 'NV') {
-      throw new BadRequestException('No cuentas con un certificado digital configurado. Sube tu archivo .p12 en la Configuración de Empresa para consolidar en facturas o boletas.');
+    const config = await this.prisma.configuracionSistema.findUnique({ where: { id: "GLOBAL" } });
+    if (!config?.certificadoBase64 && data.tipoComprobante !== 'NV') {
+      throw new BadRequestException('El sistema no cuenta con un certificado digital maestro configurado. Contacte al administrador.');
     }
 
     return await this.prisma.$transaction(async (tx) => {

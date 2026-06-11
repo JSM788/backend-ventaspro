@@ -47,7 +47,8 @@ export const FacturacionWorker = new Worker(
             data: { estadoSunat: 'PROCESANDO' }
         });
 
-        const tieneCertificado = !!comprobante.empresa?.certificadoBase64;
+        const config = await db.configuracionSistema.findUnique({ where: { id: "GLOBAL" } });
+        const tieneCertificado = !!config?.certificadoBase64;
 
         // ESCENARIO A: Cliente no cuenta con Certificado Digital propio -> Va directo a Nubefact
         if (!tieneCertificado) {
@@ -72,9 +73,9 @@ export const FacturacionWorker = new Worker(
 
             // 2. Preparar certificados
             const forge = require('node-forge');
-            const p12Der = forge.util.decode64(comprobante.empresa!.certificadoBase64);
+            const p12Der = forge.util.decode64(config!.certificadoBase64!);
             const p12Asn1 = forge.asn1.fromDer(p12Der);
-            const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, comprobante.empresa!.certificadoPassword || '');
+            const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, config!.certificadoPassword || '');
             let privateKeyPem = '', certPem = '';
             for (const safeContent of p12.safeContents) {
                 for (const safeBag of safeContent.safeBags) {
@@ -91,7 +92,7 @@ export const FacturacionWorker = new Worker(
             const { signedXml, signatureHash } = XmlSigner.sign(xmlSinFirma, privateKeyPem, certBase64);
 
             // 4. Enviar a SUNAT (SOAP)
-            const soapResult = await SunatSoapClient.sendBill(comprobante.empresa!, comprobante, signedXml);
+            const soapResult = await SunatSoapClient.sendBill(comprobante.empresa!, config!, comprobante, signedXml);
 
             // 5. Subir archivos a Almacenamiento Persistente (R2/S3)
             const { S3Provider } = require('../../../core/storage/providers/s3.provider');

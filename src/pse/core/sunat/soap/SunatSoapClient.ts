@@ -5,6 +5,7 @@ import * as path from 'path';
 export class SunatSoapClient {
     static async sendBill(
         empresa: any, 
+        config: any,
         comprobante: any, 
         signedXml: string
     ): Promise<{ cdrBuffer: Buffer | null, xmlString: string, xmlFileName: string, zipFileName: string | null }> {
@@ -21,8 +22,10 @@ export class SunatSoapClient {
         const base64Zip = zipBuffer.toString('base64');
 
         // 2. SOAP Request
-        const wsUser = `${empresa.ruc}${empresa.sunatUsuario}`;
-        const wsPass = empresa.sunatClave;
+        // NOTA: Para Firma Delegada/PSE, el wsUser debería ser el RUC del PSE + Usuario.
+        // Si sunatUsuario incluye el RUC (ej. "20123456789MODDATOS"), usamos eso. Si no, habría que agregarlo a config.
+        const wsUser = config.sunatUsuario;
+        const wsPass = config.sunatClave;
         const auth = Buffer.from(`${wsUser}:${wsPass}`).toString('base64');
 
         const soapEnvelope = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ser="http://service.sunat.gob.pe">
