@@ -1,5 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
+import { setDefaultResultOrder } from 'dns';
+
+// Priorizar IPv4 para evitar errores connect ENETUNREACH en redes IPv6 no soportadas de Render
+setDefaultResultOrder('ipv4first');
 
 @Injectable()
 export class MailService {
