@@ -84,8 +84,8 @@ export class SunatSoapClient {
             return { 
                 cdrBuffer, 
                 xmlString: signedXml,
-                xmlFileName: `/api/comprobantes/download/xml/${xmlFileName}`,
-                zipFileName: cdrBase64 ? `/api/comprobantes/download/cdr/${cdrFileName}` : null
+                xmlFileName: xmlFileName,
+                zipFileName: cdrBase64 ? cdrFileName : null
             };
         } catch (error: any) {
             clearTimeout(timeoutId);

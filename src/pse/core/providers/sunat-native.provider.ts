@@ -48,8 +48,8 @@ export class SunatNativeProvider implements IPseProvider {
         sunatStatus: 'ACEPTADO',
         message: 'Aceptado por SUNAT de manera directa.',
         // TODO: Subir XML y CDR a Storage S3/Local y retornar URLs
-        xmlUrl: soapResult.xmlFileName || undefined,
-        cdrUrl: soapResult.zipFileName || undefined
+        xmlUrl: soapResult.xmlFileName ? `/api/comprobantes/download/xml/${soapResult.xmlFileName}` : undefined,
+        cdrUrl: soapResult.zipFileName ? `/api/comprobantes/download/cdr/${soapResult.zipFileName}` : undefined
       };
     } catch (error: any) {
       this.logger.error(`[ID: ${comprobante.transaccionId}] Error en canal Nativo: ${error.message}`);
