@@ -3,6 +3,7 @@ import {
   Get,
   Put,
   Post,
+  Delete,
   Body,
   Param,
   UseInterceptors,
@@ -90,4 +91,8 @@ export class EmpresasController {
     return this.empresasService.uploadLogo(tipo, file, empresaId);
   }
 
+  @Delete(':id')
+  removeEmpresa(@Param('id') id: string) {
+    return this.empresasService.remove(id);
+  }
 }

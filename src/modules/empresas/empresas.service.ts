@@ -12,15 +12,32 @@ export class EmpresasService {
   ) {}
 
   async getAllEmpresas() {
-    return this.prisma.empresa.findMany({
+    const list = await this.prisma.empresa.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
         plan: true,
+        usuariosErp: {
+          orderBy: { createdAt: 'asc' },
+          take: 1,
+          select: { email: true }
+        },
         _count: {
           select: { comprobantes: true, usuariosErp: true }
         }
       }
     });
+
+    return list.map(emp => ({
+      id: emp.id,
+      name: emp.razonSocial,
+      ruc: emp.ruc,
+      plan: emp.plan?.nombre || 'PRO',
+      planId: emp.planId || undefined,
+      tipoNegocioId: emp.tipoNegocioId,
+      status: emp.estado,
+      comprobantesMes: emp._count.comprobantes,
+      adminEmail: emp.usuariosErp[0]?.email || ''
+    }));
   }
 
   async getConfig(empresaId: string) {
@@ -200,8 +217,30 @@ export class EmpresasService {
         };
       }
 
-      // Si tipoNegocioId cambia y es válido, podríamos actualizar los módulos, pero para mantenerlo
-      // simple por ahora solo actualizamos el campo tipoNegocioId en la empresa.
+      // Si se pasa un nuevo email de administrador, actualizar el usuario correspondiente
+      if (data.adminEmail) {
+        const existingUser = await this.prisma.usuarioErp.findFirst({
+          where: {
+            email: data.adminEmail,
+            NOT: { empresaId: id }
+          }
+        });
+        if (existingUser) {
+          throw new BadRequestException('El correo ingresado ya está registrado por otra empresa.');
+        }
+
+        const adminUser = await this.prisma.usuarioErp.findFirst({
+          where: { empresaId: id },
+          orderBy: { createdAt: 'asc' }
+        });
+
+        if (adminUser) {
+          await this.prisma.usuarioErp.update({
+            where: { id: adminUser.id },
+            data: { email: data.adminEmail }
+          });
+        }
+      }
 
       const updatedEmpresa = await this.prisma.empresa.update({
         where: { id },
@@ -297,5 +336,82 @@ export class EmpresasService {
     });
 
     return { url: result.url };
+  }
+
+  async remove(id: string) {
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        // 1. Borrar transaccionales y detalles (Compras, Ventas, Traslados, Devoluciones, Pagos)
+        await tx.comprobanteRelacion.deleteMany({
+          where: {
+            OR: [
+              { origen: { empresaId: id } },
+              { destino: { empresaId: id } }
+            ]
+          }
+        });
+        await tx.comprobanteCuota.deleteMany({ where: { comprobante: { empresaId: id } } });
+        await tx.pagoAplicacion.deleteMany({ where: { pago: { empresaId: id } } });
+        
+        await tx.comprobanteDetalle.deleteMany({ where: { comprobante: { empresaId: id } } });
+        await tx.pago.deleteMany({ where: { empresaId: id } });
+        await tx.comprobante.deleteMany({ where: { empresaId: id } });
+        await tx.cotizacion.deleteMany({ where: { empresaId: id } });
+        await tx.pedido.deleteMany({ where: { empresaId: id } });
+        
+        await tx.ordenCompraDetalle.deleteMany({ where: { ordenCompra: { empresaId: id } } });
+        await tx.ordenCompra.deleteMany({ where: { empresaId: id } });
+        
+        await tx.devolucionProveedorDetalle.deleteMany({ where: { devolucion: { empresaId: id } } });
+        await tx.devolucionProveedor.deleteMany({ where: { empresaId: id } });
+
+        await tx.trasladoDetalle.deleteMany({ where: { traslado: { empresaId: id } } });
+        await tx.traslado.deleteMany({ where: { empresaId: id } });
+
+        await tx.pedidoTiendaDetalle.deleteMany({ where: { pedidoTienda: { empresaId: id } } });
+        await tx.pedidoTienda.deleteMany({ where: { empresaId: id } });
+        await tx.clienteTienda.deleteMany({ where: { empresaId: id } });
+
+        // 2. Borrar Inventario y Almacenes (Kardex, StockAlmacen, Almacenes)
+        await tx.movimientoKardex.deleteMany({ where: { almacen: { empresaId: id } } });
+        await tx.stockAlmacen.deleteMany({ where: { empresaId: id } });
+        await tx.almacen.deleteMany({ where: { empresaId: id } });
+
+        // 3. Borrar Cajas y Turnos
+        await tx.cajaMovimiento.deleteMany({ where: { turno: { empresaId: id } } });
+        await tx.cajaTurno.deleteMany({ where: { empresaId: id } });
+        await tx.cajaCuenta.deleteMany({ where: { empresaId: id } });
+
+        // 4. Borrar Catálogo (Productos, Categorías, Marcas, Unidades alternativas)
+        await tx.productoUnidadAlternativa.deleteMany({ where: { producto: { empresaId: id } } });
+        await tx.producto.deleteMany({ where: { empresaId: id } });
+        await tx.categoria.deleteMany({ where: { empresaId: id } });
+        await tx.marca.deleteMany({ where: { empresaId: id } });
+        await tx.unidadMedida.deleteMany({ where: { empresaId: id } });
+
+        // 5. Borrar Series y Clientes
+        await tx.serieConfig.deleteMany({ where: { empresaId: id } });
+        await tx.clienteSaldo.deleteMany({ where: { cliente: { empresaId: id } } });
+        await tx.cliente.deleteMany({ where: { empresaId: id } });
+        await tx.tipoCliente.deleteMany({ where: { empresaId: id } });
+
+        // 6. Borrar Seguridad e Infra (Usuarios, Roles, Modulos asignados, Límites)
+        await tx.usuarioRol.deleteMany({ where: { usuario: { empresaId: id } } });
+        await tx.rolPermiso.deleteMany({ where: { rol: { empresaId: id } } });
+        await tx.rol.deleteMany({ where: { empresaId: id } });
+        await tx.usuarioErp.deleteMany({ where: { empresaId: id } });
+
+        await tx.empresaModulo.deleteMany({ where: { empresaId: id } });
+        await tx.empresaLimite.deleteMany({ where: { empresaId: id } });
+        await tx.empresaAddOn.deleteMany({ where: { empresaId: id } });
+        await tx.tiendaConfiguracion.deleteMany({ where: { empresaId: id } });
+        
+        // 7. Borrar finalmente la Empresa
+        await tx.empresa.delete({ where: { id } });
+      });
+      return { success: true };
+    } catch (e: any) {
+      throw new BadRequestException('Error al eliminar la empresa: ' + e.message);
+    }
   }
 }

@@ -43,8 +43,9 @@ export class MailService {
       await this.initTransporter();
     }
 
+    const fromEmail = process.env.SMTP_USER || 'no-reply@ventaspro.com';
     const info = await this.transporter.sendMail({
-      from: '"VentasPro SaaS" <no-reply@ventaspro.com>',
+      from: `"VentasPro SaaS" <${fromEmail}>`,
       to,
       subject,
       html: htmlContent,
