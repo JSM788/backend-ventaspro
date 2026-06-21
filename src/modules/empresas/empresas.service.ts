@@ -181,6 +181,14 @@ export class EmpresasService {
         console.error("Error síncrono al preparar el correo:", mailError);
       }
 
+      // Imprimir datos de acceso en consola para debug y logs de Render
+      console.log('===================================================');
+      console.log(`🔑 NUEVA EMPRESA CREADA EN EL SISTEMA:`);
+      console.log(`🏢 Empresa: ${empresa.razonSocial} (RUC: ${empresa.ruc})`);
+      console.log(`📧 Correo Administrador: ${data.adminEmail}`);
+      console.log(`🔒 Contraseña Temporal Generada: ${passwordAleatoria}`);
+      console.log('===================================================');
+
       // Devolvemos la password en el response temporalmente para testing rápido (útil en entornos de dev)
       return { ...empresa, temporaryPassword: passwordAleatoria };
     } catch (error: any) {
