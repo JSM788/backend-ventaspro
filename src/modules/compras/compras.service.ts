@@ -41,7 +41,7 @@ export class ComprasService {
       // 1. Ingresar mercadería al Kardex por cada detalle
       for (const det of orden.detalles) {
         if (det.productoId) {
-          await this.inventarioService.registrarMovimiento({
+          await this.inventarioService.registrarMovimiento(orden.empresaId, {
             almacenId,
             productoId: Number(det.productoId),
             tipoOperacion: 'INGRESO_COMPRA',

@@ -23,11 +23,9 @@ export class EmpresasService {
     });
   }
 
-  async getConfig(empresaId?: string) {
-    if (empresaId) {
-      return this.prisma.empresa.findUnique({ where: { id: empresaId } });
-    }
-    return this.prisma.empresa.findFirst();
+  async getConfig(empresaId: string) {
+    if (!empresaId) throw new BadRequestException('Empresa no definida');
+    return this.prisma.empresa.findUnique({ where: { id: empresaId } });
   }
 
   async getPlanes() {
@@ -155,16 +153,15 @@ export class EmpresasService {
       const { buildWelcomeEmailTemplate } = require('../../core/mail/templates/welcome.template');
       const emailHtml = buildWelcomeEmailTemplate(empresa.razonSocial, data.adminEmail, passwordAleatoria);
 
-      // Enviamos de forma asíncrona pero sin bloquear la respuesta si no es estrictamente necesario,
-      // aunque aquí hacemos el await para asegurarnos de que atrape errores.
+      // Enviamos de forma asíncrona (background) para no bloquear la respuesta HTTP
       try {
-        await this.mailService.sendWelcomeEmail(
+        this.mailService.sendWelcomeEmail(
           data.adminEmail,
           `¡Bienvenido a VentasPro, ${empresa.razonSocial}!`,
           emailHtml
-        );
+        ).catch(mailError => console.error("Error al enviar el correo en background:", mailError));
       } catch (mailError) {
-        console.error("Error al enviar el correo:", mailError);
+        console.error("Error síncrono al preparar el correo:", mailError);
       }
 
       // Devolvemos la password en el response temporalmente para testing rápido (útil en entornos de dev)
@@ -227,7 +224,7 @@ export class EmpresasService {
     }
   }
 
-  async createConfig(data: any, empresaId?: string) {
+  async createConfig(data: any, empresaId: string) {
     const existing = await this.getConfig(empresaId);
     if (existing) {
       throw new Error('La empresa ya está configurada. Usa PUT para actualizar.');
@@ -248,7 +245,7 @@ export class EmpresasService {
     });
   }
 
-  async updateConfig(data: any, empresaId?: string) {
+  async updateConfig(data: any, empresaId: string) {
     const empresa = await this.getConfig(empresaId);
     if (!empresa) {
       throw new Error('No hay empresa configurada. Usa POST para crearla primero.');
@@ -267,7 +264,7 @@ export class EmpresasService {
    * @param tipo 'claro' | 'oscuro'
    * @param file Archivo recibido por Multer (FileInterceptor)
    */
-  async uploadLogo(tipo: 'claro' | 'oscuro', file: Express.Multer.File, empresaId?: string) {
+  async uploadLogo(tipo: 'claro' | 'oscuro', file: Express.Multer.File, empresaId: string) {
     const empresa = await this.getConfig(empresaId);
     if (!empresa) {
       throw new Error('No hay empresa configurada para subir un logo.');

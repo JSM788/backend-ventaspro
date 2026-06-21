@@ -5,41 +5,35 @@ import { PrismaService } from '../../core/database/prisma.service';
 export class ProductosService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
-    let empresa = await this.prisma.empresa.findFirst();
-    if (!empresa) throw new BadRequestException('No existe empresa base');
-    
+  async findAll(empresaId: string) {
     return this.prisma.producto.findMany({
-      where: { empresaId: empresa.id },
+      where: { empresaId },
       orderBy: { createdAt: 'desc' }
     });
   }
 
-  async create(data: any) {
-    let empresa = await this.prisma.empresa.findFirst();
-    if (!empresa) throw new BadRequestException('No existe empresa base');
-
+  async create(empresaId: string, data: any) {
     let categoriaId: number | null = null;
     if (data.categoria) {
-      let cat = await this.prisma.categoria.findFirst({ where: { nombre: data.categoria, empresaId: empresa.id } });
+      let cat = await this.prisma.categoria.findFirst({ where: { nombre: data.categoria, empresaId } });
       if (!cat) {
-        cat = await this.prisma.categoria.create({ data: { nombre: data.categoria, empresaId: empresa.id } });
+        cat = await this.prisma.categoria.create({ data: { nombre: data.categoria, empresaId } });
       }
       categoriaId = cat.id;
     }
 
     let marcaId: number | null = null;
     if (data.marca) {
-      let mar = await this.prisma.marca.findFirst({ where: { nombre: data.marca, empresaId: empresa.id } });
+      let mar = await this.prisma.marca.findFirst({ where: { nombre: data.marca, empresaId } });
       if (!mar) {
-        mar = await this.prisma.marca.create({ data: { nombre: data.marca, empresaId: empresa.id } });
+        mar = await this.prisma.marca.create({ data: { nombre: data.marca, empresaId } });
       }
       marcaId = mar.id;
     }
 
-    return this.prisma.producto.create({
+    const producto = await this.prisma.producto.create({
       data: {
-        empresaId: empresa.id,
+        empresaId,
         tipo: data.tipo || 'PRODUCTO',
         nombre: data.nombre,
         descripcion: data.descripcion,
@@ -47,12 +41,17 @@ export class ProductosService {
         precioUnitario: data.precioUnitario,
         incluyeIgv: data.incluyeIgv ?? true,
         tipoAfectacion: data.tipoAfectacion || '10',
-        stock: data.stockInicial,
+        stock: data.stockInicial || 0,
         codigoInterno: data.codigoInterno,
         codigoSunat: data.codigoSunat,
         imagenUrl: data.imagenUrl,
         marcaId,
         categoriaId,
+        precioOriginal: data.precioOriginal,
+        publicarEnTienda: data.publicarEnTienda ?? false,
+        mostrarStockEnTienda: data.mostrarStockEnTienda ?? false,
+        destacado: data.destacado ?? false,
+        controlarStock: data.controlarStock ?? true,
       },
       include: {
         empresa: true,
@@ -60,26 +59,63 @@ export class ProductosService {
         marca: true
       }
     });
+
+    // Registrar stock inicial si existe
+    if (data.stockInicial && data.stockInicial > 0) {
+      let almacen = await this.prisma.almacen.findFirst({
+        where: { empresaId, esPrincipal: true }
+      });
+      if (!almacen) {
+        almacen = await this.prisma.almacen.findFirst({
+          where: { empresaId }
+        });
+      }
+
+      if (almacen) {
+        await this.prisma.movimientoKardex.create({
+          data: {
+            almacenId: almacen.id,
+            productoId: producto.id,
+            tipoOperacion: 'INGRESO_INICIAL',
+            cantidad: data.stockInicial,
+            costoUnitario: data.precioUnitario || 0,
+            saldoActual: data.stockInicial,
+            observacion: 'Inventario inicial al crear producto'
+          }
+        });
+
+        await this.prisma.stockAlmacen.create({
+          data: {
+            empresaId,
+            productoId: producto.id,
+            almacenId: almacen.id,
+            stock: data.stockInicial
+          }
+        });
+      }
+    }
+
+    return producto;
   }
 
-  async updateImageUrl(id: number, url: string) {
+  async updateImageUrl(id: number, empresaId: string, url: string) {
     return this.prisma.producto.update({
-      where: { id },
+      where: { id, empresaId },
       data: { imagenUrl: url }
     });
   }
 
-  async findOne(id: number) {
-    const producto = await this.prisma.producto.findUnique({
-      where: { id },
+  async findOne(id: number, empresaId: string) {
+    const producto = await this.prisma.producto.findFirst({
+      where: { id, empresaId },
       include: { categoria: true, marca: true }
     });
     if (!producto) throw new BadRequestException('Producto no encontrado');
     return producto;
   }
 
-  async update(id: number, data: any) {
-    const productoInfo = await this.prisma.producto.findUnique({ where: { id } });
+  async update(id: number, empresaId: string, data: any) {
+    const productoInfo = await this.prisma.producto.findFirst({ where: { id, empresaId } });
     if (!productoInfo) throw new BadRequestException('Producto no encontrado');
 
     let categoriaId: number | null = productoInfo.categoriaId;
@@ -116,6 +152,11 @@ export class ProductosService {
         imagenUrl: data.imagenUrl,
         marcaId,
         categoriaId,
+        precioOriginal: data.precioOriginal,
+        publicarEnTienda: data.publicarEnTienda,
+        mostrarStockEnTienda: data.mostrarStockEnTienda,
+        destacado: data.destacado,
+        controlarStock: data.controlarStock,
       },
       include: {
         categoria: true,
@@ -124,9 +165,9 @@ export class ProductosService {
     });
   }
 
-  async remove(id: number) {
-    return this.prisma.producto.delete({
-      where: { id }
+  async remove(id: number, empresaId: string) {
+    return this.prisma.producto.deleteMany({
+      where: { id, empresaId }
     });
   }
 }

@@ -31,9 +31,12 @@ import { TenantMiddleware } from './core/auth/tenant.middleware';
 
 import { ConfiguracionSistemaModule } from './modules/configuracion-sistema/configuracion-sistema.module';
 import { MailModule } from './core/mail/mail.module';
+import { TiendaVirtualModule } from './modules/tienda-virtual/tienda-virtual.module';
+import { EstablecimientosModule } from './modules/establecimientos/establecimientos.module';
+import { DevolucionesProveedorModule } from './modules/devoluciones-proveedor/devoluciones-proveedor.module';
 
 @Module({
-  imports: [DatabaseModule, ClientesModule, ComprobantesModule, NotasVentaModule, CotizacionesModule, PedidosModule, EmpresasModule, StorageModule, SeriesModule, ProductosModule, FinanzasModule, InventarioModule, ComprasModule, AuthModule, CategoriasModule, MarcasModule, CajasTurnosModule, LogsModule, PseModule, ConfiguracionSistemaModule, MailModule],
+  imports: [DatabaseModule, ClientesModule, ComprobantesModule, NotasVentaModule, CotizacionesModule, PedidosModule, EmpresasModule, StorageModule, SeriesModule, ProductosModule, FinanzasModule, InventarioModule, ComprasModule, AuthModule, CategoriasModule, MarcasModule, CajasTurnosModule, LogsModule, PseModule, ConfiguracionSistemaModule, MailModule, TiendaVirtualModule, EstablecimientosModule, DevolucionesProveedorModule],
   controllers: [AppController],
   providers: [
     AppService,

@@ -1,5 +1,6 @@
 import { IsString, IsOptional, IsNumber, IsBoolean } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { PartialType } from '@nestjs/mapped-types';
 
 export class BaseProductoDto {
   @IsOptional()
@@ -61,8 +62,35 @@ export class BaseProductoDto {
   @IsOptional()
   @IsString()
   categoria?: string;
+
+  // Campos E-commerce y Tienda Virtual
+  @IsOptional()
+  @Transform(({ value }) => (value ? Number(value) : undefined))
+  @IsNumber()
+  precioOriginal?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  publicarEnTienda?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  mostrarStockEnTienda?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  destacado?: boolean;
+
+  // Control de Inventario
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  controlarStock?: boolean;
 }
 
 export class CreateProductoDto extends BaseProductoDto {}
 
-export class UpdateProductoDto extends BaseProductoDto {}
+export class UpdateProductoDto extends PartialType(BaseProductoDto) {}

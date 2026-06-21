@@ -27,11 +27,7 @@ const storageProviderFactory = {
 @Global()
 @Module({
   providers: [
-    {
-      provide: StorageService,
-      useClass: LocalStorageProvider,
-      // Futuro: useFactory para inyección dinámica según process.env.STORAGE_PROVIDER
-    },
+    storageProviderFactory,
   ],
   exports: [StorageService],
 })

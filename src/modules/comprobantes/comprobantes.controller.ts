@@ -30,7 +30,8 @@ export class ComprobantesController {
     @Query('estado') estado?: string,
     @Query('serie') serie?: string,
     @Query('fechaInicio') fechaInicio?: string,
-    @Query('fechaFin') fechaFin?: string
+    @Query('fechaFin') fechaFin?: string,
+    @Query('tipo') tipo?: string | string[]
   ) {
     return this.comprobantesService.findAll({
       empresaId,
@@ -40,7 +41,8 @@ export class ComprobantesController {
       estado,
       serie,
       fechaInicio,
-      fechaFin
+      fechaFin,
+      tipo
     });
   }
 
@@ -59,7 +61,7 @@ export class ComprobantesController {
   }
 
   @Post('consolidar')
-  consolidar(@CurrentTenant() empresaId: string, @Body() data: { notasVentaIds: string[], clienteId: number, tipoComprobante: string, serie: string }) {
+  consolidar(@CurrentTenant() empresaId: string, @Body() data: { notasVentaIds: string[], clienteId?: number, clienteRuc?: string, clienteNombre?: string, tipoComprobante: string, serie: string }) {
     return this.comprobantesService.consolidar({ empresaId, ...data });
   }
 
@@ -68,9 +70,26 @@ export class ComprobantesController {
     return this.comprobantesService.create(empresaId, data);
   }
 
+  @Post(':id/anular')
+  async anular(@Param('id') id: string) {
+    return this.comprobantesService.anular(id);
+  }
+
   @Post(':id/retry')
   async retry(@Param('id') id: string) {
     const result = await this.pseService.emitir(id);
+
+    if (result.sunatStatus) {
+      await db.comprobante.update({
+        where: { id },
+        data: {
+          estadoSunat: result.sunatStatus as any,
+          sunatResponseMsg: result.message,
+          xmlPath: result.xmlUrl,
+          cdrPath: result.cdrUrl,
+        }
+      });
+    }
 
     if (result.success) {
       return {
@@ -107,7 +126,7 @@ export class ComprobantesController {
       const pdfBuffer = await PdfGenerator.generarComprobante(comprobante);
 
       const tipoCpe = comprobante.tipo === 'NV' ? 'NV' : (comprobante.tipo === '01' ? '01' : '03');
-      const correlativoStr = String(comprobante.correlativo).padStart(7, '0');
+      const correlativoStr = String(comprobante.correlativo).padStart(8, '0');
       const filename = `${comprobante.empresa!.ruc}-${tipoCpe}-${comprobante.serie}-${correlativoStr}.pdf`;
       
       res.setHeader('Content-Type', 'application/pdf');

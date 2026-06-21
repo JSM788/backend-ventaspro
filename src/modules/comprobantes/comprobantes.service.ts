@@ -14,6 +14,12 @@ export class ComprobantesService {
 
   private buildWhereClause(filters: any) {
     const where: any = {};
+    
+    // CRITICAL: Ensure tenant isolation
+    if (filters.empresaId) {
+      where.empresaId = filters.empresaId;
+    }
+
     if (filters.search) {
       const searchNum = parseInt(filters.search, 10);
       where.OR = [
@@ -59,7 +65,17 @@ export class ComprobantesService {
     const [data, total] = await Promise.all([
       this.prisma.comprobante.findMany({
         where,
-        include: { cliente: true, cuotas: true },
+        include: { 
+          cliente: true, 
+          cuotas: true,
+          comprobantesOrigen: {
+            include: { origen: true }
+          },
+          comprobantesDestino: {
+            include: { destino: true }
+          },
+          detalles: true
+        },
         orderBy: [
           { fechaEmision: 'desc' },
           { createdAt: 'desc' }
@@ -93,23 +109,28 @@ export class ComprobantesService {
     const where = this.buildWhereClause(filters);
     const comprobantes = await this.prisma.comprobante.findMany({ where });
     
-    const facturas = comprobantes
-      .filter(c => c.tipo === TIPOS_COMPROBANTE.FACTURA || c.tipo === 'factura')
-      .reduce((sum, c) => sum + Number(c.total), 0);
-    const boletas = comprobantes
-      .filter(c => c.tipo === TIPOS_COMPROBANTE.BOLETA || c.tipo === 'boleta')
-      .reduce((sum, c) => sum + Number(c.total), 0);
-    const notasCredito = comprobantes
-      .filter(c => c.tipo === TIPOS_COMPROBANTE.NOTA_CREDITO || c.tipo === 'nota_credito')
-      .reduce((sum, c) => sum + Number(c.total), 0);
-    const notasDebito = comprobantes
-      .filter(c => c.tipo === TIPOS_COMPROBANTE.NOTA_DEBITO || c.tipo === 'nota_debito')
-      .reduce((sum, c) => sum + Number(c.total), 0);
-    const notasVenta = comprobantes
-      .filter(c => c.tipo === TIPOS_COMPROBANTE.NOTA_VENTA || c.tipo === 'nota_venta')
-      .reduce((sum, c) => sum + Number(c.total), 0);
+    const comprobantesValidos = comprobantes.filter((c: any) => 
+      c.estadoSunat !== ESTADOS_SUNAT.RECHAZADO && 
+      c.estadoSunat !== ESTADOS_SUNAT.ANULADO
+    );
+
+    const facturas = comprobantesValidos
+      .filter((c: any) => c.tipo === TIPOS_COMPROBANTE.FACTURA || c.tipo === 'factura')
+      .reduce((sum: number, c: any) => sum + Number(c.total), 0);
+    const boletas = comprobantesValidos
+      .filter((c: any) => c.tipo === TIPOS_COMPROBANTE.BOLETA || c.tipo === 'boleta')
+      .reduce((sum: number, c: any) => sum + Number(c.total), 0);
+    const notasCredito = comprobantesValidos
+      .filter((c: any) => c.tipo === TIPOS_COMPROBANTE.NOTA_CREDITO || c.tipo === 'nota_credito')
+      .reduce((sum: number, c: any) => sum + Number(c.total), 0);
+    const notasDebito = comprobantesValidos
+      .filter((c: any) => c.tipo === TIPOS_COMPROBANTE.NOTA_DEBITO || c.tipo === 'nota_debito')
+      .reduce((sum: number, c: any) => sum + Number(c.total), 0);
+    const notasVenta = comprobantesValidos
+      .filter((c: any) => c.tipo === TIPOS_COMPROBANTE.NOTA_VENTA || c.tipo === 'nota_venta')
+      .reduce((sum: number, c: any) => sum + Number(c.total), 0);
     
-    const saldo = comprobantes.reduce((sum, c) => sum + Number(c.total), 0);
+    const saldo = comprobantesValidos.reduce((sum: number, c: any) => sum + Number(c.total), 0);
     const total = facturas + boletas + notasDebito - notasCredito;
 
     return {
@@ -213,12 +234,26 @@ export class ComprobantesService {
           condicionPago: data.condicionPago || CONDICIONES_PAGO.CONTADO,
           estadoPago: data.condicionPago === CONDICIONES_PAGO.CREDITO ? ESTADOS_PAGO.PENDIENTE : ESTADOS_PAGO.PAGADO,
           cuotas: data.condicionPago === CONDICIONES_PAGO.CREDITO ? {
-            create: [{
-              numero: 1,
-              fechaVencimiento: new Date(data.fechaVencimiento || data.fechaEmision),
-              monto: data.total,
-              estado: ESTADOS_PAGO.PENDIENTE
-            }]
+            create: data.cuotas && data.cuotas.length > 0
+              ? data.cuotas.map((c: any) => ({
+                  numero: c.numero,
+                  fechaVencimiento: new Date(c.fechaVencimiento),
+                  monto: c.monto,
+                  estado: ESTADOS_PAGO.PENDIENTE
+                }))
+              : [{
+                  numero: 1,
+                  fechaVencimiento: new Date(data.fechaVencimiento || data.fechaEmision),
+                  monto: data.total,
+                  estado: ESTADOS_PAGO.PENDIENTE
+                }]
+          } : undefined,
+          comprobantesOrigen: data.notasVentaOrigenIds && data.notasVentaOrigenIds.length > 0 ? {
+            create: data.notasVentaOrigenIds.map((id: string) => ({
+              origenId: id,
+              tipoRelacion: 'FACTURACION',
+              montoAsignado: 0
+            }))
           } : undefined,
           detalles: {
             create: data.detalles.map((d: any) => ({
@@ -234,6 +269,14 @@ export class ComprobantesService {
         }
       });
 
+      // Si fue una consolidación, marcamos las NVs originales como CANJEADAS/PAGADAS
+      if (data.notasVentaOrigenIds && data.notasVentaOrigenIds.length > 0) {
+        await tx.comprobante.updateMany({
+          where: { id: { in: data.notasVentaOrigenIds } },
+          data: { estadoPago: 'CANJEADO' } // Indicando que ya fue cobrada/consolidada en otra factura
+        });
+      }
+
       // d. Actualizamos el registro de correlativos
       await tx.serieConfig.update({
         where: { id: serieConfig.id },
@@ -246,7 +289,7 @@ export class ComprobantesService {
       if (almacenDefecto) {
         for (const det of data.detalles) {
           if (det.productoId) {
-            await this.inventarioService.registrarMovimiento({
+            await this.inventarioService.registrarMovimiento(empresa.id, {
               almacenId: almacenDefecto.id,
               productoId: Number(det.productoId),
               tipoOperacion: 'SALIDA_VENTA',
@@ -280,10 +323,57 @@ export class ComprobantesService {
     return result;
   }
 
-  async consolidar(data: { empresaId: string, notasVentaIds: string[], clienteId: number, tipoComprobante: string, serie: string }) {
+  async anular(id: string) {
+    const comprobante = await this.prisma.comprobante.findUnique({ where: { id } });
+    if (!comprobante) {
+      throw new BadRequestException('Comprobante no encontrado');
+    }
+
+    if (comprobante.estadoSunat === ESTADOS_SUNAT.ACEPTADO) {
+      throw new BadRequestException('El comprobante ya fue aceptado por SUNAT. Use Nota de Crédito/Baja.');
+    }
+
+    return await this.prisma.comprobante.update({
+      where: { id },
+      data: { estadoSunat: ESTADOS_SUNAT.ANULADO }
+    });
+  }
+
+  async consolidar(data: { empresaId: string, notasVentaIds: string[], clienteId?: number, clienteRuc?: string, clienteNombre?: string, tipoComprobante: string, serie: string }) {
     const config = await this.prisma.configuracionSistema.findUnique({ where: { id: "GLOBAL" } });
     if (!config?.certificadoBase64 && data.tipoComprobante !== 'NV') {
       throw new BadRequestException('El sistema no cuenta con un certificado digital maestro configurado. Contacte al administrador.');
+    }
+
+    let finalClienteId = data.clienteId;
+    if (!finalClienteId && data.clienteRuc) {
+      let cliente = await this.prisma.cliente.findUnique({ where: { empresaId_ruc: { empresaId: data.empresaId, ruc: data.clienteRuc } } });
+      if (!cliente) {
+        let tipoCliente = await this.prisma.tipoCliente.findFirst({ where: { empresaId: data.empresaId } });
+        if (!tipoCliente) {
+          tipoCliente = await this.prisma.tipoCliente.create({
+            data: { nombre: `General - ${data.empresaId.substring(0,8)}`, descripcion: 'Tipo de cliente por defecto', empresaId: data.empresaId }
+          });
+        }
+        cliente = await this.prisma.cliente.create({
+          data: {
+            ruc: data.clienteRuc,
+            razonSocial: data.clienteNombre || "Cliente sin nombre",
+            tipoClienteId: tipoCliente.id,
+            empresaId: data.empresaId
+          }
+        });
+      } else if (data.clienteNombre && cliente.razonSocial !== data.clienteNombre) {
+        cliente = await this.prisma.cliente.update({
+          where: { id: cliente.id },
+          data: { razonSocial: data.clienteNombre }
+        });
+      }
+      finalClienteId = cliente.id;
+    }
+
+    if (!finalClienteId) {
+      throw new BadRequestException('Se requiere un cliente válido para consolidar.');
     }
 
     return await this.prisma.$transaction(async (tx) => {
@@ -295,11 +385,23 @@ export class ComprobantesService {
           tipo: 'NV',
         },
         include: {
-          detalles: true
+          detalles: true,
+          comprobantesDestino: true
         }
       });
 
+      // Validar que ninguna nota haya sido consolidada ya
+      const notasYaConsolidadas = notas.filter(n => n.estadoPago === 'CANJEADO' || n.comprobantesDestino.length > 0);
+      if (notasYaConsolidadas.length > 0) {
+        throw new BadRequestException(`Algunas Notas de Venta ya han sido consolidadas previamente: ${notasYaConsolidadas.map(n => `${n.serie}-${n.correlativo}`).join(', ')}`);
+      }
+
       if (notas.length === 0) {
+        console.error("DEBUG CONSOLIDAR:", {
+          buscados: data.notasVentaIds,
+          empresaId: data.empresaId,
+          tipo: 'NV'
+        });
         throw new BadRequestException('No se encontraron Notas de Venta válidas para consolidar');
       }
 
@@ -352,7 +454,7 @@ export class ComprobantesService {
           serie: data.serie,
           correlativo: nuevoCorrelativo,
           fechaEmision: new Date(),
-          clienteId: data.clienteId,
+          clienteId: finalClienteId,
           moneda: 'PEN',
           operacionGravada: totalGravada,
           igv: totalIgv,

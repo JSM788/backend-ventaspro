@@ -10,10 +10,17 @@ export class SunatSoapClient {
         signedXml: string
     ): Promise<{ cdrBuffer: Buffer | null, xmlString: string, xmlFileName: string, zipFileName: string | null }> {
         const tipoCpe = (comprobante.tipo === '01' || comprobante.tipo.toLowerCase() === 'factura') ? '01' : '03';
-        const correlativoStr = String(comprobante.correlativo).padStart(7, '0');
+        const correlativoStr = String(comprobante.correlativo).padStart(8, '0');
         
         const xmlFileName = `${empresa.ruc}-${tipoCpe}-${comprobante.serie}-${correlativoStr}.xml`;
         const zipFileName = `${empresa.ruc}-${tipoCpe}-${comprobante.serie}-${correlativoStr}.zip`;
+        const cdrFileName = `R-${zipFileName}`;
+
+        // Ensure directories exist
+        const uploadsDir = path.join(process.cwd(), 'uploads');
+        if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
+        if (!fs.existsSync(path.join(uploadsDir, 'xml'))) fs.mkdirSync(path.join(uploadsDir, 'xml'));
+        if (!fs.existsSync(path.join(uploadsDir, 'cdr'))) fs.mkdirSync(path.join(uploadsDir, 'cdr'));
 
         // 1. Comprimir en ZIP
         const zip = new AdmZip();
@@ -21,9 +28,10 @@ export class SunatSoapClient {
         const zipBuffer = zip.toBuffer();
         const base64Zip = zipBuffer.toString('base64');
 
+        // Save XML to disk
+        fs.writeFileSync(path.join(uploadsDir, 'xml', xmlFileName), signedXml);
+
         // 2. SOAP Request
-        // NOTA: Para Firma Delegada/PSE, el wsUser debería ser el RUC del PSE + Usuario.
-        // Si sunatUsuario incluye el RUC (ej. "20123456789MODDATOS"), usamos eso. Si no, habría que agregarlo a config.
         const wsUser = config.sunatUsuario;
         const wsPass = config.sunatClave;
         const auth = Buffer.from(`${wsUser}:${wsPass}`).toString('base64');
@@ -57,24 +65,28 @@ export class SunatSoapClient {
 
             const soapResponseText = await response.text();
 
-        if (soapResponseText.includes('faultstring')) {
-            const match = soapResponseText.match(/<faultstring>(.*?)<\/faultstring>/s);
-            const errorMsg = match ? match[1] : 'Error desconocido en SUNAT';
-            const customError = new Error(errorMsg);
-            (customError as any).sunatCode = 'SUNAT_RECHAZO';
-            throw customError;
-        }
+            if (soapResponseText.includes('faultstring')) {
+                const match = soapResponseText.match(/<faultstring>(.*?)<\/faultstring>/s);
+                const errorMsg = match ? match[1] : 'Error desconocido en SUNAT';
+                const customError = new Error(errorMsg);
+                (customError as any).sunatCode = 'SUNAT_RECHAZO';
+                throw customError;
+            }
 
-        const cdrMatch = soapResponseText.match(/<applicationResponse>(.*?)<\/applicationResponse>/s);
-        const cdrBase64 = cdrMatch ? cdrMatch[1].trim() : '';
-        const cdrBuffer = cdrBase64 ? Buffer.from(cdrBase64, 'base64') : null;
+            const cdrMatch = soapResponseText.match(/<applicationResponse>(.*?)<\/applicationResponse>/s);
+            const cdrBase64 = cdrMatch ? cdrMatch[1].trim() : '';
+            const cdrBuffer = cdrBase64 ? Buffer.from(cdrBase64, 'base64') : null;
 
-        return { 
-            cdrBuffer, 
-            xmlString: signedXml,
-            xmlFileName,
-            zipFileName: cdrBase64 ? `R-${zipFileName}` : null
-        };
+            if (cdrBuffer) {
+                fs.writeFileSync(path.join(uploadsDir, 'cdr', cdrFileName), cdrBuffer);
+            }
+
+            return { 
+                cdrBuffer, 
+                xmlString: signedXml,
+                xmlFileName: `/api/comprobantes/download/xml/${xmlFileName}`,
+                zipFileName: cdrBase64 ? `/api/comprobantes/download/cdr/${cdrFileName}` : null
+            };
         } catch (error: any) {
             clearTimeout(timeoutId);
             if (error.name === 'AbortError') {

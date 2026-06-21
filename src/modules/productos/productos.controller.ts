@@ -16,6 +16,7 @@ import { memoryStorage } from 'multer';
 import { ProductosService } from './productos.service';
 import { StorageService } from '../../core/storage/storage.interface';
 import { CreateProductoDto, UpdateProductoDto } from './dto/producto.dto';
+import { CurrentTenant } from '../../core/auth/current-tenant.decorator';
 
 @Controller('v1/productos')
 export class ProductosController {
@@ -25,25 +26,26 @@ export class ProductosController {
   ) {}
 
   @Get()
-  getAll() {
-    return this.productosService.findAll();
+  getAll(@CurrentTenant() empresaId: string) {
+    return this.productosService.findAll(empresaId);
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.productosService.findOne(id);
+  findOne(@Param('id', ParseIntPipe) id: number, @CurrentTenant() empresaId: string) {
+    return this.productosService.findOne(id, empresaId);
   }
 
   @Post()
   @UseInterceptors(FileInterceptor('imagen', { storage: memoryStorage() }))
   async create(
+    @CurrentTenant() empresaId: string,
     @Body() data: CreateProductoDto,
     @UploadedFile() file?: Express.Multer.File
   ) {
     // Si viene la data como formData (multipart/form-data), vendrá en texto plano
     // y necesitaremos parsearla en caso hayan booleanos, pero para empezar lo dejamos así.
     
-    const producto = await this.productosService.create(data);
+    const producto = await this.productosService.create(empresaId, data);
     
     // Si subió imagen, la guardamos
     if (file) {
@@ -65,19 +67,19 @@ export class ProductosController {
       );
       
       // Actualizamos el producto con el url de la imagen guardada
-      await this.productosService.updateImageUrl(producto.id, uploadResult.url);
+      await this.productosService.updateImageUrl(producto.id, empresaId, uploadResult.url);
     }
     
     return { success: true, productoId: producto.id };
   }
 
   @Put(':id')
-  update(@Param('id', ParseIntPipe) id: number, @Body() data: UpdateProductoDto) {
-    return this.productosService.update(id, data);
+  update(@CurrentTenant() empresaId: string, @Param('id', ParseIntPipe) id: number, @Body() data: UpdateProductoDto) {
+    return this.productosService.update(id, empresaId, data);
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.productosService.remove(id);
+  remove(@CurrentTenant() empresaId: string, @Param('id', ParseIntPipe) id: number) {
+    return this.productosService.remove(id, empresaId);
   }
 }

@@ -35,6 +35,7 @@ model Empresa {
   logoClaro   String?       @map("logo_claro")
   logoOscuro  String?       @map("logo_oscuro")
   estado      EstadoEmpresa @default(ACTIVO)
+  porcentajeIgv Decimal @default(18.00) @map("porcentaje_igv")
 
   tipoNegocioId String?      @map("tipo_negocio_id")
   tipoNegocio   TipoNegocio? @relation(fields: [tipoNegocioId], references: [id])
@@ -58,17 +59,39 @@ model Empresa {
   cajasCuentas  CajaCuenta[]
   almacenes     Almacen[]
   ordenesCompra OrdenCompra[]
+  stockAlmacenes StockAlmacen[]
+  traslados      Traslado[]
+  devolucionesProveedor DevolucionProveedor[]
   clientes      Cliente[]
   cotizaciones  Cotizacion[]
   pedidos       Pedido[]
   pagos         Pago[]
   tiposCliente  TipoCliente[]
   turnosCaja    CajaTurno[]
+  clientesTienda ClienteTienda[]
+  pedidosTienda PedidoTienda[]
+  tiendaConfiguracion TiendaConfiguracion?
 
   createdAt     DateTime       @default(now()) @map("created_at")
   unidadMedidas UnidadMedida[]
 
   @@map("empresas")
+}
+
+model TiendaConfiguracion {
+  id            String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  empresaId     String  @unique @map("empresa_id") @db.Uuid
+  empresa       Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  
+  logoUrl       String? @map("logo_url")
+  bannerUrl     String? @map("banner_url")
+  colorPrimario String? @default("#2D2491") @map("color_primario")
+  whatsapp      String?
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("tienda_configuraciones")
 }
 
 // --- IDENTITY & RBAC ---
@@ -85,6 +108,8 @@ model UsuarioErp {
 
   roles UsuarioRol[]
   logs  AuditoriaLog[]
+  trasladosEnviados Traslado[] @relation("UsuarioEnvio")
+  trasladosRecibidos Traslado[] @relation("UsuarioRecepcion")
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -249,6 +274,8 @@ model Cliente {
   pagos         Pago[]
   saldo         ClienteSaldo?
   ordenesCompra OrdenCompra[]
+  clientesTienda ClienteTienda[]
+  devolucionesProveedor DevolucionProveedor[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -515,12 +542,25 @@ model Producto {
   marcaId Int?   @map("marca_id")
   marca   Marca? @relation(fields: [marcaId], references: [id])
 
+  // Campos e-commerce y Tienda Virtual
+  precioOriginal       Decimal? @map("precio_original") @db.Decimal(12, 2)
+  publicarEnTienda     Boolean  @default(false) @map("publicar_en_tienda")
+  mostrarStockEnTienda Boolean  @default(false) @map("mostrar_stock_en_tienda")
+  destacado            Boolean  @default(false)
+  
+  // Control de Inventario
+  controlarStock       Boolean  @default(true) @map("controlar_stock")
+
   categoriaId Int?       @map("categoria_id")
   categoria   Categoria? @relation(fields: [categoriaId], references: [id])
 
   movimientosKardex   MovimientoKardex[]
   detallesComprobante ComprobanteDetalle[]
   detallesOrdenCompra OrdenCompraDetalle[]
+  pedidosTiendaDetalle PedidoTiendaDetalle[]
+  stockAlmacenes      StockAlmacen[]
+  trasladoDetalles    TrasladoDetalle[]
+  devolucionDetalles  DevolucionProveedorDetalle[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -536,8 +576,15 @@ model Almacen {
   direccion   String?
   esPrincipal Boolean @default(false) @map("es_principal")
   estado      String  @default("ACTIVO") // ACTIVO, INACTIVO
+  codigoSunat String? @map("codigo_sunat")
+  telefono    String?
+  correo      String?
 
   movimientos MovimientoKardex[]
+  stockAlmacenes StockAlmacen[]
+  trasladosOrigen Traslado[] @relation("AlmacenOrigen")
+  trasladosDestino Traslado[] @relation("AlmacenDestino")
+  devolucionesProveedor DevolucionProveedor[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -842,4 +889,183 @@ model ConfiguracionSistema {
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@map("configuracion_sistema")
+}
+
+// --- E-COMMERCE Y TIENDA VIRTUAL ---
+
+model ClienteTienda {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  empresaId String  @map("empresa_id") @db.Uuid
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  email     String
+  password  String? // Null si es invitado que solo dejó datos o si usa OAuth en el futuro
+  nombres   String
+  apellidos String?
+  telefono  String?
+
+  clientePosId Int?     @map("cliente_pos_id")
+  clientePos   Cliente? @relation(fields: [clientePosId], references: [id])
+
+  pedidos PedidoTienda[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([empresaId, email])
+  @@map("clientes_tienda")
+}
+
+model PedidoTienda {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  empresaId String  @map("empresa_id") @db.Uuid
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  clienteTiendaId String?        @map("cliente_tienda_id") @db.Uuid
+  clienteTienda   ClienteTienda? @relation(fields: [clienteTiendaId], references: [id])
+
+  estado String @default("CARRITO") // CARRITO, PENDIENTE_PAGO, PAGADO, EN_PREPARACION, ENVIADO, ENTREGADO, CANCELADO
+
+  total          Decimal @default(0) @db.Decimal(12, 2)
+  costoEnvio     Decimal @default(0) @map("costo_envio") @db.Decimal(12, 2)
+  metodoEnvio    String? @map("metodo_envio") // RECOJO_TIENDA, DELIVERY
+  direccionEnvio String? @map("direccion_envio")
+  
+  datosContacto  Json?   @map("datos_contacto") // { nombre, telefono, email } por si es compra sin cuenta (invitado)
+
+  detalles PedidoTiendaDetalle[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("pedidos_tienda")
+}
+
+model PedidoTiendaDetalle {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  pedidoTiendaId String       @map("pedido_tienda_id") @db.Uuid
+  pedidoTienda   PedidoTienda @relation(fields: [pedidoTiendaId], references: [id], onDelete: Cascade)
+
+  productoId Int      @map("producto_id")
+  producto   Producto @relation(fields: [productoId], references: [id])
+
+  cantidad       Int
+  precioUnitario Decimal @map("precio_unitario") @db.Decimal(12, 2)
+  subtotal       Decimal @db.Decimal(12, 2)
+
+  @@map("pedidos_tienda_detalles")
+}
+
+// --- NUEVOS MODELOS INVENTARIO AVANZADO ---
+
+model StockAlmacen {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  empresaId       String   @map("empresa_id") @db.Uuid
+  empresa         Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  
+  productoId      Int      @map("producto_id")
+  producto        Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  
+  almacenId       String   @map("almacen_id") @db.Uuid
+  almacen         Almacen  @relation(fields: [almacenId], references: [id], onDelete: Cascade)
+  
+  stock           Decimal  @default(0) @db.Decimal(12, 2)
+  stockMinimo     Decimal  @default(0) @map("stock_minimo") @db.Decimal(12, 2)
+  stockMaximo     Decimal  @default(0) @map("stock_maximo") @db.Decimal(12, 2)
+  ubicacionFisica String?  @map("ubicacion_fisica")
+  
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([productoId, almacenId])
+  @@map("stock_almacenes")
+}
+
+model Traslado {
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  empresaId              String    @map("empresa_id") @db.Uuid
+  empresa                Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  
+  numero                 String    @unique
+  almacenOrigenId        String    @map("almacen_origen_id") @db.Uuid
+  almacenOrigen          Almacen   @relation("AlmacenOrigen", fields: [almacenOrigenId], references: [id])
+  
+  almacenDestinoId       String    @map("almacen_destino_id") @db.Uuid
+  almacenDestino         Almacen   @relation("AlmacenDestino", fields: [almacenDestinoId], references: [id])
+  
+  estado                 String    @default("BORRADOR") // BORRADOR, EN_TRANSITO, RECIBIDO, CANCELADO
+  fechaEnvio             DateTime  @default(now()) @map("fecha_envio")
+  fechaRecepcion         DateTime? @map("fecha_recepcion")
+  
+  responsableEnvioId     String?   @map("responsable_envio_id")
+  responsableEnvio       UsuarioErp? @relation("UsuarioEnvio", fields: [responsableEnvioId], references: [id])
+  
+  responsableRecepcionId String?   @map("responsable_recepcion_id")
+  responsableRecepcion   UsuarioErp? @relation("UsuarioRecepcion", fields: [responsableRecepcionId], references: [id])
+  
+  observaciones          String?   @db.Text
+  
+  detalles               TrasladoDetalle[]
+  
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  @@map("traslados")
+}
+
+model TrasladoDetalle {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  trasladoId       String   @map("traslado_id") @db.Uuid
+  traslado         Traslado @relation(fields: [trasladoId], references: [id], onDelete: Cascade)
+  
+  productoId       Int      @map("producto_id")
+  producto         Producto @relation(fields: [productoId], references: [id])
+  
+  cantidadEnviada  Decimal  @map("cantidad_enviada") @db.Decimal(12, 2)
+  cantidadRecibida Decimal  @default(0) @map("cantidad_recibida") @db.Decimal(12, 2)
+
+  @@map("traslados_detalles")
+}
+
+model DevolucionProveedor {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  empresaId          String   @map("empresa_id") @db.Uuid
+  empresa            Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  
+  numero             String   @unique
+  proveedorId        Int      @map("proveedor_id")
+  proveedor          Cliente  @relation(fields: [proveedorId], references: [id])
+  
+  ordenCompraId      String?  @map("orden_compra_id") @db.Uuid // Opcional
+  
+  almacenId          String   @map("almacen_id") @db.Uuid
+  almacen            Almacen  @relation(fields: [almacenId], references: [id])
+  
+  motivo             String   // DEFECTO, EXCESO, EQUIVOCACION
+  estado             String   @default("REGISTRADA") // REGISTRADA, APLICADA, CANCELADA
+  fecha              DateTime @default(now())
+  
+  montoTotalAfectado Decimal  @default(0) @map("monto_total_afectado") @db.Decimal(12, 2)
+  observaciones      String?  @db.Text
+  
+  detalles           DevolucionProveedorDetalle[]
+  
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("devoluciones_proveedor")
+}
+
+model DevolucionProveedorDetalle {
+  id             String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  devolucionId   String              @map("devolucion_id") @db.Uuid
+  devolucion     DevolucionProveedor @relation(fields: [devolucionId], references: [id], onDelete: Cascade)
+  
+  productoId     Int                 @map("producto_id")
+  producto       Producto            @relation(fields: [productoId], references: [id])
+  
+  cantidad       Decimal             @db.Decimal(12, 2)
+  precioCompra   Decimal             @map("precio_compra") @db.Decimal(12, 2)
+  
+  @@map("devoluciones_proveedor_detalles")
 }

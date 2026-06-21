@@ -8,11 +8,11 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
-  Req,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { EmpresasService } from './empresas.service';
+import { CurrentTenant } from '../../core/auth/current-tenant.decorator';
 
 @Controller('empresas')
 export class EmpresasController {
@@ -44,18 +44,18 @@ export class EmpresasController {
   }
 
   @Get('config')
-  getConfig(@Req() req: any) {
-    return this.empresasService.getConfig(req.user?.empresaId);
+  getConfig(@CurrentTenant() empresaId: string) {
+    return this.empresasService.getConfig(empresaId);
   }
 
   @Post('config')
-  createConfig(@Body() data: any, @Req() req: any) {
-    return this.empresasService.createConfig(data, req.user?.empresaId);
+  createConfig(@Body() data: any, @CurrentTenant() empresaId: string) {
+    return this.empresasService.createConfig(data, empresaId);
   }
 
   @Put('config')
-  updateConfig(@Body() data: any, @Req() req: any) {
-    return this.empresasService.updateConfig(data, req.user?.empresaId);
+  updateConfig(@Body() data: any, @CurrentTenant() empresaId: string) {
+    return this.empresasService.updateConfig(data, empresaId);
   }
 
   /**
@@ -81,13 +81,13 @@ export class EmpresasController {
   uploadLogo(
     @Param('tipo') tipo: string,
     @UploadedFile() file: Express.Multer.File,
-    @Req() req: any,
+    @CurrentTenant() empresaId: string,
   ) {
     if (!file) throw new BadRequestException('No se recibió ningún archivo');
     if (tipo !== 'claro' && tipo !== 'oscuro') {
       throw new BadRequestException('El parámetro tipo debe ser "claro" u "oscuro"');
     }
-    return this.empresasService.uploadLogo(tipo, file, req.user?.empresaId);
+    return this.empresasService.uploadLogo(tipo, file, empresaId);
   }
 
 }

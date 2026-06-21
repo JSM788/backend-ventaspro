@@ -61,7 +61,7 @@ export class InvoiceBuilder {
         // Tipo de documento del cliente (6 = RUC, 1 = DNI)
         const tipoDocCliente = cliente.ruc.length === 11 ? '6' : '1';
 
-        const correlativoStr = String(comprobante.correlativo).padStart(7, '0');
+        const correlativoStr = String(comprobante.correlativo).padStart(8, '0');
 
         const isCredito = comprobante.condicionPago?.toUpperCase() === 'CREDITO';
         

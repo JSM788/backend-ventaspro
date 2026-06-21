@@ -33,7 +33,7 @@ export class PdfGenerator {
             const esNotaVenta = comprobante.tipo === 'NV';
             const tipoComprobanteStr = esNotaVenta ? 'NOTA DE VENTA' : (comprobante.tipo.toUpperCase() === '01' ? 'FACTURA ELECTRÓNICA' : 'BOLETA DE VENTA ELECTRÓNICA');
             const tipoCpe = esNotaVenta ? 'NV' : (comprobante.tipo === '01' ? '01' : '03');
-            const correlativoStr = String(comprobante.correlativo).padStart(7, '0');
+            const correlativoStr = String(comprobante.correlativo).padStart(8, '0');
             const fechaEmision = comprobante.fechaEmision.toISOString().split('T')[0];
             const tipoDocCliente = cliente.ruc.length === 11 ? '6' : '1';
 

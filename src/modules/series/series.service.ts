@@ -5,27 +5,20 @@ import { PrismaService } from '../../core/database/prisma.service';
 export class SeriesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getAll(tipo?: string) {
-    // Por ahora usamos la empresa de prueba (multitenant futuro)
-    const empresa = await this.prisma.empresa.findFirst();
-    if (!empresa) throw new BadRequestException('Empresa no encontrada');
-
+  async getAll(empresaId: string, tipo?: string) {
     return this.prisma.serieConfig.findMany({
       where: { 
-        empresaId: empresa.id,
+        empresaId,
         ...(tipo ? { tipoComprobante: tipo } : {})
       },
       orderBy: { serie: 'asc' },
     });
   }
 
-  async create(data: { tipoComprobante: string; serie: string; correlativoInicio: number }) {
-    const empresa = await this.prisma.empresa.findFirst();
-    if (!empresa) throw new BadRequestException('Empresa no encontrada');
-
+  async create(empresaId: string, data: { tipoComprobante: string; serie: string; correlativoInicio: number }) {
     // Validar si la serie ya existe para esta empresa
     const existe = await this.prisma.serieConfig.findFirst({
-      where: { empresaId: empresa.id, serie: data.serie },
+      where: { empresaId, serie: data.serie },
     });
 
     if (existe) {
@@ -38,7 +31,7 @@ export class SeriesService {
 
     return this.prisma.serieConfig.create({
       data: {
-        empresaId: empresa.id,
+        empresaId,
         tipoComprobante: data.tipoComprobante,
         serie: data.serie,
         ultimoCorrelativo,
@@ -47,16 +40,16 @@ export class SeriesService {
     });
   }
 
-  async remove(id: number) {
+  async remove(empresaId: string, id: number) {
     // Validar si la serie ya tiene comprobantes emitidos.
     // Como las series están atadas indirectamente a los comprobantes por el string "serie",
     // verificamos si hay algún comprobante con esta serie.
     const serieConfig = await this.prisma.serieConfig.findUnique({ where: { id } });
-    if (!serieConfig) throw new BadRequestException('Serie no encontrada');
+    if (!serieConfig || serieConfig.empresaId !== empresaId) throw new BadRequestException('Serie no encontrada');
 
     const comprobantesEmitidos = await this.prisma.comprobante.findFirst({
       where: {
-        empresaId: serieConfig.empresaId,
+        empresaId,
         serie: serieConfig.serie,
       },
     });

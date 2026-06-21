@@ -5,24 +5,18 @@ import { PrismaService } from '../../core/database/prisma.service';
 export class MarcasService {
   constructor(private prisma: PrismaService) {}
 
-  async create(data: { nombre: string }) {
-    let empresa = await this.prisma.empresa.findFirst();
-    if (!empresa) throw new BadRequestException('No existe empresa base');
-
+  async create(empresaId: string, data: { nombre: string }) {
     return this.prisma.marca.create({
       data: {
         nombre: data.nombre,
-        empresaId: empresa.id
+        empresaId
       }
     });
   }
 
-  async findAll() {
-    let empresa = await this.prisma.empresa.findFirst();
-    if (!empresa) return [];
-    
+  async findAll(empresaId: string) {
     return this.prisma.marca.findMany({
-      where: { empresaId: empresa.id },
+      where: { empresaId },
       include: {
         _count: {
           select: { productos: true }
@@ -32,15 +26,15 @@ export class MarcasService {
     });
   }
 
-  async remove(id: number) {
+  async remove(empresaId: string, id: number) {
     // Check if it's used in any products
-    const inUse = await this.prisma.producto.findFirst({ where: { marcaId: id } });
+    const inUse = await this.prisma.producto.findFirst({ where: { marcaId: id, empresaId } });
     if (inUse) {
       throw new BadRequestException('No se puede eliminar la marca porque está en uso por uno o más productos.');
     }
 
-    return this.prisma.marca.delete({
-      where: { id }
+    return this.prisma.marca.deleteMany({
+      where: { id, empresaId }
     });
   }
 }
